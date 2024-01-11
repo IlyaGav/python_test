@@ -1,9 +1,9 @@
 from typing import List
 
 import shapely
-from shapely import Polygon, Geometry, unary_union, Point, MultiPoint, LineString
+from shapely import Polygon, Geometry, Point, MultiPoint
 
-from shapely_plot import add_to_plot_geometry, show_plot, set_title
+from shapely_plot import add_to_plot_geometry
 
 
 class KDTree(object):
@@ -103,13 +103,42 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
     # )
 
 
-def find_nearest_neighbor(tree: KDTree, point: Point):
-    min_dist = min_dist_nearest_neighbor(tree, point, tree)
-    return find_nearest_neighbor_from(tree, point, min_dist)
+def kd_tree_find_nearest_neighbor(tree: KDTree, point: Point):
+    return find_nearest_neighbor_internal(tree, point, None)
+
+
+def find_nearest_neighbor_internal(tree: KDTree, point: Point, best: Geometry = None):
+    if tree is None:
+        return best
+
+    shapes = tree.shapes.copy()
+    shapes.sort(key=lambda s: shapely.distance(s, point))
+
+    _best = shapes[0] if len(shapes) > 0 else None
+
+    if best is None or shapely.distance(_best, point) < shapely.distance(best, point):
+        best = _best
+
+    if not tree.is_leaf():
+        if tree.left.boundary.contains(point):
+            best = find_nearest_neighbor_internal(tree.left, point, best)
+            if best is None or shapely.distance(tree.right.boundary, point) < shapely.distance(best, point):
+                best = find_nearest_neighbor_internal(tree.right, point, best)
+        elif tree.right.boundary.contains(point):
+            best = find_nearest_neighbor_internal(tree.right, point, best)
+            if best is None or shapely.distance(tree.left.boundary, point) < shapely.distance(best, point):
+                best = find_nearest_neighbor_internal(tree.left, point, best)
+
+    return best
+
+
+def find_nearest_neighbor_2(tree: KDTree, point: Point):
+    min_dist = min_dist_nearest_neighbor_2(tree, point, tree)
+    return find_nearest_neighbor_2_internal(tree, point, min_dist)
 
 
 #  TODO best_dist == 0, rename var
-def min_dist_nearest_neighbor(tree: KDTree, point: Point, root: KDTree):
+def min_dist_nearest_neighbor_2(tree: KDTree, point: Point, root: KDTree):
     # TODO Вычислять всегда, вдруг попали на ось пересечения или только у листов?
     best_dist = min(map(lambda s: shapely.distance(s, point), tree.shapes)) if len(tree.shapes) > 0 else None
 
@@ -120,9 +149,9 @@ def min_dist_nearest_neighbor(tree: KDTree, point: Point, root: KDTree):
     if tree.is_leaf():
         dist = best_dist
     elif tree.left.boundary.contains(point):
-        dist = min_dist_nearest_neighbor(tree.left, point, root)
+        dist = min_dist_nearest_neighbor_2(tree.left, point, root)
     else:
-        dist = min_dist_nearest_neighbor(tree.right, point, root)
+        dist = min_dist_nearest_neighbor_2(tree.right, point, root)
 
     return min(best_dist, dist) if best_dist is not None else dist
 
@@ -144,8 +173,8 @@ def min_dist_nearest_neighbor(tree: KDTree, point: Point, root: KDTree):
     # show_plot()
 
 
-# TODO rename
-def find_nearest_neighbor_from(tree: KDTree, point: Point, radius: int):
+# TODO rename, refactor
+def find_nearest_neighbor_2_internal(tree: KDTree, point: Point, radius: int):
     # TODO Или пересечение или расстояние меньше радиуса
     shapes = list(filter(lambda s: shapely.distance(s, point) <= radius, tree.shapes))
     shapes.sort(key=lambda s: shapely.distance(s, point))
@@ -162,10 +191,10 @@ def find_nearest_neighbor_from(tree: KDTree, point: Point, radius: int):
     r_nearest = None
 
     if shapely.distance(tree.left.boundary, point) <= radius:
-        l_nearest = find_nearest_neighbor_from(tree.left, point, radius)
+        l_nearest = find_nearest_neighbor_2_internal(tree.left, point, radius)
 
     if shapely.distance(tree.right.boundary, point) <= radius:
-        r_nearest = find_nearest_neighbor_from(tree.right, point, radius)
+        r_nearest = find_nearest_neighbor_2_internal(tree.right, point, radius)
 
     l = list(filter(lambda n: n is not None, [l_nearest, r_nearest, best]))
     l.sort(key=lambda n: shapely.distance(n, point))
@@ -186,6 +215,19 @@ def find_median(geometries: List[Geometry], axes):
         median_1 = all_coords[len(all_coords) // 2 - 1]
         median_2 = all_coords[len(all_coords) // 2]
         return (median_1 + median_2) / 2
+
+
+def plot_kd_tree(tree: KDTree):
+    add_to_plot_geometry(tree.boundary, 'black')
+
+    for shape in tree.shapes:
+        add_to_plot_geometry(shape, 'orange')
+
+    if tree.is_leaf():
+        return
+
+    plot_kd_tree(tree.left)
+    plot_kd_tree(tree.right)
 
 # def plot_kd_tree(tree: KDTree, depth: int):
 #     if tree is None or tree.depth > depth:
