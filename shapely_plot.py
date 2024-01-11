@@ -31,5 +31,9 @@ def add_to_plot_geometry(geometry: shapely.Geometry, color: ColorType = None):
         raise ValueError(f"Unsupported Shapely geometry type {geometry.__class__}")
 
 
+def set_title(title):
+    plt.title(title)
+
+
 def show_plot():
     plt.show()
