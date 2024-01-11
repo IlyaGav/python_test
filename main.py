@@ -62,7 +62,6 @@ add_to_plot_geometry(point)
 
 try:
     nearest_neighbor = find_nearest_neighbor(tree, point)
-    print(nearest_neighbor)
     add_to_plot_geometry(nearest_neighbor, 'red')
 except Exception as e:
     show_plot()

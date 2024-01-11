@@ -162,11 +162,9 @@ def find_nearest_neighbor_from(tree: KDTree, point: Point, radius: int):
     r_nearest = None
 
     if shapely.distance(tree.left.boundary, point) <= radius:
-        print('intersection left')
         l_nearest = find_nearest_neighbor_from(tree.left, point, radius)
 
     if shapely.distance(tree.right.boundary, point) <= radius:
-        print('intersection right')
         r_nearest = find_nearest_neighbor_from(tree.right, point, radius)
 
     l = list(filter(lambda n: n is not None, [l_nearest, r_nearest, best]))
