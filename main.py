@@ -1,11 +1,13 @@
+import datetime
 import random
+import time
 
 import shapely.geometry
 from shapely import MultiPoint, unary_union
 from shapely.affinity import scale
 from shapely.geometry import Point, LineString, Polygon
 
-from kd_tree import build_kd_tree
+from kd_tree import build_kd_tree, find_nearest_neighbor
 from shapely_plot import add_to_plot_geometry, show_plot
 
 
@@ -32,10 +34,38 @@ def generate_random_box(min_coord=0, max_coord=10):
     return Polygon([(x1, y1), (x2, y1), (x2, y2), (x1, y2)])
 
 
-shapes = [generate_random_box() for _ in range(2)]
+seed = int(time.time())
+# seed = 1704987030
+random.seed(seed)
+print(f"random seed {seed}")
 
+shapes = [generate_random_box() for _ in range(15)]
 
-rec = scale(unary_union(shapes).envelope, 1.2, 1.2, 1.2)
+point = generate_random_point()
+
+rec = scale(unary_union([*shapes, point]).envelope, 1.2, 1.2, 1.2)
 tree = build_kd_tree(rec, shapes)
 
+# for shape in shapes:
+#     add_to_plot_geometry(shape)
+#
+# add_to_plot_geometry(rec, 'black')
+# add_to_plot_geometry(point)
+#
 # show_plot()
+
+
+for shape in shapes:
+    add_to_plot_geometry(shape)
+
+add_to_plot_geometry(point)
+
+try:
+    nearest_neighbor = find_nearest_neighbor(tree, point)
+    print(nearest_neighbor)
+    add_to_plot_geometry(nearest_neighbor, 'red')
+except Exception as e:
+    show_plot()
+    raise e
+
+show_plot()
