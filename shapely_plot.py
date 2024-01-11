@@ -28,7 +28,7 @@ def add_to_plot_geometry(geometry: shapely.Geometry, color: ColorType = None):
             x, y = point.x, point.y
             plt.plot(x, y, 'o', color=color if color is not None else 'red', label='MultiPoint')
     else:
-        raise ValueError("Unsupported Shapely geometry type")
+        raise ValueError(f"Unsupported Shapely geometry type {geometry.__class__}")
 
 
 def show_plot():
