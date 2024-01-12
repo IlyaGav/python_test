@@ -30,9 +30,18 @@ def z_decode(morton):
     return (x, y)
 
 
-def cmp_zorder(a, b):
+def cmp_zorder(za, zb):
+    ax, ay = z_decode(za)
+    bx, by = z_decode(zb)
+
+    a = [ax, ay]
+    b = [bx, by]
+
+    return _cmp_zorder(a, b)
+
+
+def _cmp_zorder(a, b):
     j = 0
-    k = 0
     x = 0
     for k in range(2):
         y = a[k] ^ b[k]

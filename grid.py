@@ -1,4 +1,4 @@
-import pyzorder
+from functools import cmp_to_key
 from typing import List, Dict
 
 import matplotlib.pyplot as plt
@@ -9,6 +9,7 @@ from shapely import Geometry, Polygon, Point
 
 import z_curve
 from shapely_plot import add_to_plot_geometry, show_plot
+
 
 class SpatialGrid:
     def __init__(self, boundary: Polygon, grid_size: int = 4, limit_cells: int = 16, levels: int = 4):
@@ -22,8 +23,6 @@ class SpatialGrid:
 
         self.limit_cells = limit_cells
         self.levels = levels
-        # TODO не выделять сразу память (мб тогда словарь использовать)
-        # self.grids: List[List[List[Geometry] | None]] = [[None] * pow(grid_size, pow(l + 1, 2)) for l in range(levels)]
         self.grids: List[Dict[int, List[Geometry]]] = [{} for _ in range(levels)]
 
     # def calculate_level(self, width, height):
@@ -71,13 +70,17 @@ class SpatialGrid:
         return self.grids[level].get(cell_id, [])
 
 
-def grid_find_nearest_neighbor(grid, point: Point):
+def grid_find_nearest_neighbor(grid: SpatialGrid, point: Point):
     min_distance = float('inf')
     nearest_neighbor = None
 
     query_x, query_y = point.x, point.y
 
     for level in range(0, grid.levels):
+        print(f'level {level}')
+
+        nearest_neighbor_on_level = None
+
         cell_width = grid.width / pow(grid.grid_size, level + 1)
         cell_height = grid.height / pow(grid.grid_size, level + 1)
 
@@ -85,10 +88,11 @@ def grid_find_nearest_neighbor(grid, point: Point):
 
         cell_id = z_curve.z_encode(grid_x, grid_y)
 
-        neighbors = grid.get_objects_in_cell(level, cell_id)
+        print(f'cell_id {cell_id}')
+
+        neighbors = grid.grids[level].get(cell_id, [])
 
         for neighbor in neighbors:
-
             # TODO Дистанцию считать от MBR
             #  Подумать:
             #  Если до MBR ближе, то и до фигуры ближе?
@@ -97,7 +101,57 @@ def grid_find_nearest_neighbor(grid, point: Point):
 
             if distance < min_distance:
                 min_distance = distance
+                nearest_neighbor_on_level = neighbor
                 nearest_neighbor = neighbor
+
+        print(f'nearest_neighbor {nearest_neighbor}')
+
+        if nearest_neighbor_on_level is None:
+            # TODO Добавить какой-то радиус? Все ячейки может быть много для последнего уровня
+            cell_keys = list(grid.grids[level].keys())
+
+            if len(cell_keys) == 0:
+                continue
+
+            if cell_id not in cell_keys:
+                cell_keys.append(cell_id)
+
+            print(f'source_keys {cell_keys}')
+
+            cell_keys = sorted(cell_keys, key=cmp_to_key(z_curve.cmp_zorder))
+            print(f'cmp_zorder_keys {cell_keys}')
+
+            target_index = cell_keys.index(cell_id)
+            cell_keys = sorted(enumerate(cell_keys), key=lambda item: abs(item[0] - target_index))
+
+            print(f'target_order_keys {cell_keys}')
+
+            cell_keys = list(map(lambda c: c[1], cell_keys))
+
+            print(f'pre_output_keys {cell_keys}')
+
+            cell_keys = cell_keys[1:]
+
+            print(f'output_keys {cell_keys}')
+
+            cells: List[List[Geometry]] = []
+
+            for index, cell_key in enumerate(cell_keys):
+                cell = grid.grids[level][cell_key]
+                if cell is not None and len(cell) > 0:
+                    cells.append(cell)
+                    # Посетили ближайшие в округе
+                    if index > 7:
+                        break
+
+            neighbors_2 = [cc for c in cells for cc in c]
+
+            for neighbor in neighbors_2:
+                distance = shapely.distance(point, neighbor)
+
+                if distance < min_distance:
+                    min_distance = distance
+                    nearest_neighbor = neighbor
 
     return nearest_neighbor
 
