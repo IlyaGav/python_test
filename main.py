@@ -1,13 +1,15 @@
 import random
 import time
 
+import shapely
 from shapely import unary_union
 from shapely.affinity import scale
 from shapely.geometry import Point, LineString, Polygon
 
-from grid import SpatialGrid, find_nearest_neighbor_point, visualize_grid
+from grid import SpatialGrid, grid_find_nearest_neighbor, visualize_grid, print_grid
 from kd_tree import build_kd_tree, kd_tree_find_nearest_neighbor, plot_kd_tree
 from quad_tree import build_quad_tree, quad_tree_find_nearest_neighbor, plot_quad_tree
+from shapely_plot import add_to_plot_geometry, show_plot
 
 
 def generate_random_point(min_coord=0, max_coord=10):
@@ -47,16 +49,20 @@ def generate_random_box(min_coord=0, max_coord=100, min_length=0.5, max_length=8
 
 
 seed = int(time.time())
-# seed = 1705004669
+# seed = 1705050649
+# seed = 1705051400
 random.seed(seed)
 print(f"random seed {seed}")
 
-# shapes = [generate_random_box() for _ in range(500)]
-#
-# point = generate_random_point()
-#
+shapes = [generate_random_box() for _ in range(5)]
+
+point = generate_random_point()
+
+print(point)
+
 # rec = scale(unary_union([*shapes, point]).envelope, 1.2, 1.2, 1.2)
-#
+boundary = shapely.box(0, 0, 100, 100)
+
 # kd_tree = build_kd_tree(rec, shapes)
 # plot_kd_tree(kd_tree)
 #
@@ -80,21 +86,29 @@ print(f"random seed {seed}")
 # show_plot()
 
 # Пример использования
-spatial_grid = SpatialGrid(base_grid_size=10, max_cells=16, levels=4)
+grid = SpatialGrid(boundary)
 
-obj1 = {'x': 5, 'y': 5, 'width': 3, 'height': 3}
-obj2 = {'x': 12, 'y': 5, 'width': 3, 'height': 3}
-obj3 = {'x': 20, 'y': 20, 'width': 15, 'height': 15}
+for shape in shapes:
+    grid.add_object(shape)
 
-spatial_grid.add_object(obj1)
-spatial_grid.add_object(obj2)
-spatial_grid.add_object(obj3)
+# nearest_neighbor = grid_find_nearest_neighbor(grid, point)
 
-# Пример работы с сеткой (поиск ближайшего соседа по прямоугольнику)
-query_rect = {'x': 2, 'y': 2, 'width': 4, 'height': 4}
-nearest_neighbor_rect = find_nearest_neighbor_point(spatial_grid, query_rect)
+add_to_plot_geometry(boundary, 'red')
+
+for shape in shapes:
+    add_to_plot_geometry(shape)
+
+# add_to_plot_geometry(point)
+
+# add_to_plot_geometry(nearest_neighbor)
+
+visualize_grid(grid)
+
+show_plot()
+
+# Вывод сетки на консоль
+print_grid(grid)
 
 # Выводим результат
-print(f"Nearest neighbor (query rect):", nearest_neighbor_rect)
+# print(f"Nearest neighbor (query rect):", nearest_neighbor)
 
-visualize_grid(spatial_grid, query_rect, nearest_neighbor_rect)
