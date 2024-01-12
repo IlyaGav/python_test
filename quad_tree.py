@@ -201,12 +201,15 @@ def build_quad_tree(boundary: Polygon, shapes: List[shapely.Geometry]):
 def quad_tree_find_nearest_neighbor(tree: Quadtree, point: Point):
     return find_nearest_neighbor_internal(tree, point, None)
 
-
-# TODO Много дублирования
+# TODO Сортировку заменить пробегом с сохранением минимума?
 def find_nearest_neighbor_internal(tree: Quadtree, point: Point, best: Geometry = None):
     if tree is None:
         return best
 
+    # TODO Дистанцию считать от MBR
+    #  Подумать:
+    #  Если до MBR ближе, то и до фигуры ближе?
+    #  А если точка содержится в MBR, то может быть что до другой фигуры будет ближе
     shapes = tree.shapes.copy()
     shapes.sort(key=lambda s: shapely.distance(s, point))
 

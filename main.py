@@ -1,16 +1,51 @@
 import random
 import time
 
+import pyzorder
 import shapely
+from pyzorder import pymorton
 from shapely import unary_union
 from shapely.affinity import scale
 from shapely.geometry import Point, LineString, Polygon
 
+import z_curve
 from grid import SpatialGrid, grid_find_nearest_neighbor, visualize_grid, print_grid
 from kd_tree import build_kd_tree, kd_tree_find_nearest_neighbor, plot_kd_tree
 from quad_tree import build_quad_tree, quad_tree_find_nearest_neighbor, plot_quad_tree
 from shapely_plot import add_to_plot_geometry, show_plot
 
+
+
+
+
+
+# Ваша функция encodeComponent также должна быть переведена на Python
+# def encode_component(mask, bits, dim, bit_pos_mod_dim):
+#     # Ваша реализация encodeComponent
+
+
+from pyzorder import ZOrderIndexer
+
+from test_z import ZCurve
+
+zi = ZOrderIndexer((0, 0), (7, 7))
+
+z_2_2 = zi.zindex(2, 2)
+# z_2_2 = 12
+
+print(zi.next_zorder_index(z_2_2))
+
+print('-------------')
+
+zz = ZCurve(2, 32)
+
+b = zz.encode([5, 3])
+
+print(zz.big_min(60 , 24, 31))
+
+
+
+print('-------------')
 
 def generate_random_point(min_coord=0, max_coord=10):
     return Point(random.uniform(min_coord, max_coord), random.uniform(min_coord, max_coord))
@@ -49,7 +84,7 @@ def generate_random_box(min_coord=0, max_coord=100, min_length=0.5, max_length=8
 
 
 seed = int(time.time())
-# seed = 1705050649
+# seed = 1705066752
 # seed = 1705051400
 random.seed(seed)
 print(f"random seed {seed}")
@@ -107,8 +142,7 @@ visualize_grid(grid)
 show_plot()
 
 # Вывод сетки на консоль
-print_grid(grid)
+# print_grid(grid)
 
 # Выводим результат
 # print(f"Nearest neighbor (query rect):", nearest_neighbor)
-
