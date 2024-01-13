@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import timeit
 from typing import List
 
 import shapely
@@ -9,7 +10,7 @@ from shapely_plot import add_to_plot_geometry
 
 
 class Quadtree(object):
-    def __init__(self, boundary: Polygon, depth: int, bucket_capacity=8, max_depth=8):
+    def __init__(self, boundary: Polygon, depth: int, bucket_capacity, max_depth):
         self.boundary = boundary
         self.depth = depth
 
@@ -29,7 +30,7 @@ class Quadtree(object):
 
     def insert(self, shape: Geometry):
         if not self.boundary.contains(shapely.envelope(shape)):
-            raise ValueError("ElementOutsideQuadtreeBounds")
+            raise ValueError("ElementOutside")
 
         if len(self.shapes) >= self.bucket_capacity:
             self.split()
@@ -40,93 +41,6 @@ class Quadtree(object):
             containing_child.insert(shape)
         else:
             self.shapes.append(shape)
-
-    # def Remove(self, element):
-    #     containing_child = self.GetContainingChild(element.Bounds)
-    #     removed = containing_child.Remove(element) if containing_child else self._elements.remove(element)
-    #
-    #     if removed and self.CountElements() <= self._bucket_capacity:
-    #         self.Merge()
-    #
-    #     return removed
-
-    # def Intersects(self, element):
-    #     nodes = Queue()
-    #     collisions = []
-    #
-    #     nodes.put(self)
-    #
-    #     while not nodes.empty():
-    #         node = nodes.get()
-    #
-    #         if not element.Intersects(node.Bounds):
-    #             continue
-    #
-    #         collisions.extend(
-    #             e for e in node._elements if e.Bounds.Intersects(element)
-    #         )
-    #
-    #         if not node.IsLeaf:
-    #             nodes.put(node._top_left)
-    #             nodes.put(node._top_right)
-    #             nodes.put(node._bottom_left)
-    #             nodes.put(node._bottom_right)
-    #
-    #     return collisions
-    #
-    # def Contains(self, element):
-    #     nodes = Queue()
-    #     contained = []
-    #
-    #     nodes.put(self)
-    #
-    #     while not nodes.empty():
-    #         node = nodes.get()
-    #
-    #         if not node.Bounds.Contains(element):
-    #             continue
-    #
-    #         contained.extend(
-    #             e for e in node._elements if e.Bounds.Contains(element)
-    #         )
-    #
-    #         if not node.IsLeaf:
-    #             nodes.put(node._top_left)
-    #             nodes.put(node._top_right)
-    #             nodes.put(node._bottom_left)
-    #             nodes.put(node._bottom_right)
-    #
-    #     return contained
-
-    # def CountElements(self):
-    #     count = len(self._elements)
-    #
-    #     if not self.IsLeaf:
-    #         count += self._top_left.CountElements()
-    #         count += self._top_right.CountElements()
-    #         count += self._bottom_left.CountElements()
-    #         count += self._bottom_right.CountElements()
-    #
-    #     return count
-
-    # def GetElements(self):
-    #     children = []
-    #     nodes = Queue()
-    #
-    #     nodes.put(self)
-    #
-    #     while not nodes.empty():
-    #         node = nodes.get()
-    #
-    #         if not node.IsLeaf:
-    #             nodes.put(node._top_left)
-    #             nodes.put(node._top_right)
-    #             nodes.put(node._bottom_left)
-    #             nodes.put(node._bottom_right)
-    #
-    #         children.extend(node._elements)
-    #
-    #     return children
 
     def split(self):
         if not self.is_leaf():
@@ -157,17 +71,6 @@ class Quadtree(object):
                 self.shapes.remove(shape)
                 containing_child.insert(shape)
 
-    # def Merge(self):
-    #     if self.IsLeaf:
-    #         return
-    #
-    #     self._elements.extend(self._top_left._elements)
-    #     self._elements.extend(self._top_right._elements)
-    #     self._elements.extend(self._bottom_left._elements)
-    #     self._elements.extend(self._bottom_right._elements)
-    #
-    #     self._top_left = self._top_right = self._bottom_left = self._bottom_right = None
-
     def get_containing_child(self, shape):
         if self.is_leaf():
             return None
@@ -186,11 +89,11 @@ class Quadtree(object):
         return self.bottom_right if self.bottom_right.boundary.contains(boundary) else None
 
 
-def build_quad_tree(boundary: Polygon, shapes: List[shapely.Geometry]):
+def build_quad_tree(boundary: Polygon, shapes: List[shapely.Geometry], bucket_capacity: int = 8, max_depth: int = 8):
     if not shapes or len(shapes) == 0:
         return None
 
-    tree = Quadtree(boundary, 0, 4, 8)
+    tree = Quadtree(boundary, 0, bucket_capacity, max_depth)
 
     for shape in shapes:
         tree.insert(shape)
@@ -199,35 +102,42 @@ def build_quad_tree(boundary: Polygon, shapes: List[shapely.Geometry]):
 
 
 def quad_tree_find_nearest_neighbor(tree: Quadtree, point: Point):
-    return find_nearest_neighbor_internal(tree, point, None)
+    return find_nearest_neighbor_internal(tree, point, None, float('inf'))
 
-# TODO Сортировку заменить пробегом с сохранением минимума?
-def find_nearest_neighbor_internal(tree: Quadtree, point: Point, best: Geometry = None):
+
+def find_nearest_neighbor_internal(tree: Quadtree, point: Point, nearest: Geometry | None, min_distance):
     if tree is None:
-        return best
+        return nearest, min_distance
 
-    # TODO Дистанцию считать от MBR
-    #  Подумать:
-    #  Если до MBR ближе, то и до фигуры ближе?
-    #  А если точка содержится в MBR, то может быть что до другой фигуры будет ближе
-    shapes = tree.shapes.copy()
-    shapes.sort(key=lambda s: shapely.distance(s, point))
+    candidate, distance = get_nearest(tree.shapes, point)
 
-    _best = shapes[0] if len(shapes) > 0 else None
-
-    if best is None or shapely.distance(_best, point) < shapely.distance(best, point):
-        best = _best
+    if distance < min_distance:
+        nearest = candidate
 
     if not tree.is_leaf():
         nodes = [tree.top_left, tree.top_right, tree.bottom_right, tree.bottom_left]
         for i in range(len(nodes)):
             if nodes[i].boundary.contains(point):
-                best = find_nearest_neighbor_internal(nodes[i], point, best)
+                nearest, min_distance = find_nearest_neighbor_internal(nodes[i], point, nearest, min_distance)
                 for j in filter(lambda jj: jj != i, range(len(nodes))):
-                    if best is None or shapely.distance(nodes[j].boundary, point) < shapely.distance(best, point):
-                        best = find_nearest_neighbor_internal(nodes[j], point, best)
+                    if shapely.distance(nodes[j].boundary, point) < min_distance:
+                        nearest = find_nearest_neighbor_internal(nodes[j], point, nearest, min_distance)
 
-    return best
+    return nearest, min_distance
+
+
+def get_nearest(shapes: List[Geometry], point: Point):
+    min_distance = float('inf')
+    nearest = None
+
+    for shape in shapes:
+        distance = shapely.distance(point, shape)
+
+        if distance < min_distance:
+            min_distance = distance
+            nearest = shape
+
+    return nearest, min_distance
 
 
 def plot_quad_tree(tree: Quadtree):
@@ -243,3 +153,11 @@ def plot_quad_tree(tree: Quadtree):
     plot_quad_tree(tree.top_right)
     plot_quad_tree(tree.bottom_left)
     plot_quad_tree(tree.bottom_right)
+
+
+def quad_tree_benchmark_build(boundary: Polygon, shapes: List[shapely.Geometry], bucket_capacity=8, max_depth=8):
+    return timeit.Timer(lambda: build_quad_tree(boundary, shapes, bucket_capacity, max_depth)).timeit(1)
+
+
+def quad_tree_benchmark_find_nearest_neighbor(tree: Quadtree, query_point: Point):
+    return timeit.Timer(lambda: quad_tree_find_nearest_neighbor(tree, query_point)).timeit(1)

@@ -1,3 +1,4 @@
+import timeit
 from typing import List, Dict
 
 import shapely
@@ -173,24 +174,6 @@ def fixed_grid_find_nearest_neighbor(grid: FixedGrid, point: Point):
     return nearest_neighbor
 
 
-def plot_fixed_grid(grid: FixedGrid):
-    for level in range(grid.levels):
-        cells = grid.grids[level]
-        for (key, cell) in cells.items():
-            xmin, ymin = z_curve.z_decode(key)
-
-            width = grid.width / pow(grid.grid_size, level + 1)
-            height = grid.height / pow(grid.grid_size, level + 1)
-            xmin = xmin * width
-            ymin = ymin * height
-
-            box = shapely.box(xmin, ymin, xmin + width, ymin + height)
-            add_to_plot_geometry(box, 'black')
-
-            for shape in cell:
-                add_to_plot_geometry(shape, 'orange')
-
-
 def square_distance(x1, y1, x2, y2):
     return (x2 - x1) ** 2 + (y2 - y1) ** 2
 
@@ -234,3 +217,30 @@ def get_nearest(neighbors: List[Geometry], point: Point):
             nearest = neighbor
 
     return nearest, min_distance
+
+
+def plot_fixed_grid(grid: FixedGrid):
+    for level in range(grid.levels):
+        cells = grid.grids[level]
+        for (key, cell) in cells.items():
+            xmin, ymin = z_curve.z_decode(key)
+
+            width = grid.width / pow(grid.grid_size, level + 1)
+            height = grid.height / pow(grid.grid_size, level + 1)
+            xmin = xmin * width
+            ymin = ymin * height
+
+            box = shapely.box(xmin, ymin, xmin + width, ymin + height)
+            add_to_plot_geometry(box, 'black')
+
+            for shape in cell:
+                add_to_plot_geometry(shape, 'orange')
+
+
+def fixed_grid_benchmark_build(boundary: Polygon, shapes: List[shapely.Geometry], grid_size: int = 4,
+                               limit_cells: int = 16, levels: int = 4):
+    return timeit.Timer(lambda: build_fixed_grid(boundary, shapes, grid_size, limit_cells, levels)).timeit(1)
+
+
+def fixed_grid_benchmark_find_nearest_neighbor(tree: FixedGrid, query_point: Point):
+    return timeit.Timer(lambda: fixed_grid_find_nearest_neighbor(tree, query_point)).timeit(1)

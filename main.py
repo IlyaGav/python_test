@@ -6,13 +6,16 @@ import shapely
 from shapely import unary_union
 from shapely.geometry import Point, LineString, Polygon
 
-from grid import fixed_grid_find_nearest_neighbor, plot_fixed_grid, build_fixed_grid
-from kd_tree import build_kd_tree, kd_tree_find_nearest_neighbor, plot_kd_tree
-from quad_tree import build_quad_tree, quad_tree_find_nearest_neighbor, plot_quad_tree
+from fixed_grid import fixed_grid_find_nearest_neighbor, plot_fixed_grid, build_fixed_grid, fixed_grid_benchmark_build, \
+    fixed_grid_benchmark_find_nearest_neighbor
+from kd_tree import build_kd_tree, kd_tree_find_nearest_neighbor, plot_kd_tree, kd_tree_benchmark_build, \
+    kd_tree_benchmark_find_nearest_neighbor
+from quad_tree import build_quad_tree, quad_tree_find_nearest_neighbor, plot_quad_tree, quad_tree_benchmark_build, \
+    quad_tree_benchmark_find_nearest_neighbor
 from shapely_plot import add_to_plot_geometry, show_plot, set_title
 
 
-def generate_random_point(min_x_coord=0, min_y_coord=0, max_x_coord=100, max_y_coord=100,):
+def generate_random_point(min_x_coord=0, min_y_coord=0, max_x_coord=100, max_y_coord=100, ):
     return Point(random.uniform(min_x_coord, max_x_coord), random.uniform(min_y_coord, max_y_coord))
 
 
@@ -69,83 +72,44 @@ def d(setup):
 
 
 def benchmark():
-    print('start build benchmark')
-
-    min_x, min_y, max_x, max_y = 0, 0, 10_000, 10_000
+    min_x, min_y, max_x, max_y = 0, 0, 1_000_000, 1_000_000
 
     min_length, max_length = 1, 15
 
-    count_data = 10_000
+    count_data = 100_000_000
 
-    number = 5
+    boundary = shapely.box(min_x, min_y, max_x, max_y)
 
-    boundary = shapely.box(0, 0, 10_000, 10_000)
+    print('generate data...')
 
-    print('generate data')
+    data_set = [generate_random_box(min_x, min_y, max_x, max_y, min_length, max_length) for _ in range(count_data)]
 
-    data_set = [[generate_random_box(min_x, min_y, max_x, max_y, min_length, max_length) for _ in range(count_data)] for
-                _ in range(number)]
+    print('start build benchmark')
 
-    def test(setup, repeat=number):
-        r = []
-        for i in range(repeat):
-            t = timeit.Timer(lambda: setup(i)).timeit(1)
-            r.append(t)
+    print()
 
-        return r
-
-    print('start timeit')
-
-    print(f'build_kd_tree: {test(lambda i: build_kd_tree(boundary, data_set[i]), number)}')
-    print(f'build_quad_tree: {test(lambda i: build_quad_tree(boundary, data_set[i]), number)}')
-    print(f'build_spatial_grid: {test(lambda i: build_fixed_grid(boundary, data_set[i]), number)}')
-
-    print('finish build benchmark')
+    print('kd_tree_build', kd_tree_benchmark_build(boundary, data_set))
+    print('quad_tree_build', quad_tree_benchmark_build(boundary, data_set))
+    print('fixed_grid_build', fixed_grid_benchmark_build(boundary, data_set))
 
     print()
     print()
 
-def benchmark_find_nearest_neighbor():
+    print('start nearest_neighbor benchmark')
 
+    print('building...')
 
-    print('start find_nearest_neighbor benchmark')
+    point = generate_random_point(min_x, min_y, max_x, max_y)
 
-    print('build indexes')
+    kd_tree = build_kd_tree(boundary, data_set)
+    quad_tree = build_quad_tree(boundary, data_set)
+    fixed_grid = build_fixed_grid(boundary, data_set)
 
-    count_point_for_query = 10
+    print()
 
-    import numpy as np
-
-    for i in range(number):
-
-        kd_tree = build_kd_tree(boundary, data_set[i])
-        quad_tree = build_quad_tree(boundary, data_set[i])
-        fixed_grid = build_fixed_grid(boundary, data_set[i])
-
-        query_points = [generate_random_point(min_x, min_y, max_x, max_y)] * count_point_for_query
-        np.mean(test(lambda i: kd_tree_find_nearest_neighbor(kd_tree, query_points[i]), i))
-        d = test(lambda i: kd_tree_find_nearest_neighbor(kd_tree, query_points[i]), i)
-
-
-
-
-    test(lambda i: kd_tree_find_nearest_neighbor(kd_tree, point), number)
-
-    point = generate_random_point()
-
-    count_launch_nearest_neighbor = 1
-
-    nearest_neighbor_kd_tree_timer = timeit.Timer(lambda: kd_tree_find_nearest_neighbor(kd_tree, point))
-    nearest_neighbor_quad_tree_timer = timeit.Timer(lambda: quad_tree_find_nearest_neighbor(quad_tree, point))
-    nearest_neighbor_fixed_grid_timer = timeit.Timer(lambda: fixed_grid_find_nearest_neighbor(fixed_grid, point))
-
-    print('start timeit')
-
-    print(f'nearest_neighbor_kd_tree: {nearest_neighbor_kd_tree_timer.timeit(count_launch_nearest_neighbor)}')
-    print(f'nearest_neighbor_quad_tree: {nearest_neighbor_quad_tree_timer.timeit(count_launch_nearest_neighbor)}')
-    print(f'nearest_neighbor_fixed_grid: {nearest_neighbor_fixed_grid_timer.timeit(count_launch_nearest_neighbor)}')
-
-    print('finish find_nearest_neighbor benchmark')
+    print('kd_tree_nearest_neighbor', kd_tree_benchmark_find_nearest_neighbor(kd_tree, point))
+    print('quad_tree_nearest_neighbor', quad_tree_benchmark_find_nearest_neighbor(quad_tree, point))
+    print('fixed_grid_nearest_neighbor', fixed_grid_benchmark_find_nearest_neighbor(fixed_grid, point))
 
     print()
     print()

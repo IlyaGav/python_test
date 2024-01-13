@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import timeit
 from typing import List
 
 import shapely
@@ -68,7 +71,7 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
         else:
             self.append(shape)
 
-    # TODO Для тестирования
+    # TODO Для тестирования и визуализации шагов
     # add_to_plot_geometry(left_boundary, 'red')
     # add_to_plot_geometry(right_boundary, 'green')
     # add_to_plot_geometry(boundary, 'blue')
@@ -92,49 +95,51 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
         right=build_kd_tree(right_boundary, right, depth + 1)
     )
 
-    # points.sort(key=lambda x: x[axis])
-    # median = len(points) // 2
-    #
-    # return Node(
-    #     point=points[median],
-    #     depth=depth,
-    #     left=build_kd_tree(points[:median], depth + 1),
-    #     right=build_kd_tree(points[median + 1:], depth + 1)
-    # )
-
 
 def kd_tree_find_nearest_neighbor(tree: KDTree, point: Point):
-    return find_nearest_neighbor_internal(tree, point, None)
+    return find_nearest_neighbor_internal(tree, point, None, float('inf'))
 
-# TODO Сортировку заменить пробегом с сохранением минимума?
-def find_nearest_neighbor_internal(tree: KDTree, point: Point, best: Geometry = None):
+
+def find_nearest_neighbor_internal(tree: KDTree, point: Point, nearest: Geometry | None, min_distance):
     if tree is None:
-        return best
-    # TODO Дистанцию считать от MBR
-    #  Подумать:
-    #  Если до MBR ближе, то и до фигуры ближе?
-    #  А если точка содержится в MBR, то может быть что до другой фигуры будет ближе
-    shapes = tree.shapes.copy()
-    shapes.sort(key=lambda s: shapely.distance(s, point))
+        return nearest
 
-    _best = shapes[0] if len(shapes) > 0 else None
+    candidate, distance = get_nearest(tree.shapes, point)
 
-    if best is None or shapely.distance(_best, point) < shapely.distance(best, point):
-        best = _best
+    if distance < min_distance:
+        nearest = candidate
 
     if not tree.is_leaf():
         if tree.left.boundary.contains(point):
-            best = find_nearest_neighbor_internal(tree.left, point, best)
-            if best is None or shapely.distance(tree.right.boundary, point) < shapely.distance(best, point):
-                best = find_nearest_neighbor_internal(tree.right, point, best)
+            nearest, min_distance = find_nearest_neighbor_internal(tree.left, point, nearest, min_distance)
+            if shapely.distance(tree.right.boundary, point) < min_distance:
+                nearest, min_distance = find_nearest_neighbor_internal(tree.right, point, nearest, min_distance)
         elif tree.right.boundary.contains(point):
-            best = find_nearest_neighbor_internal(tree.right, point, best)
-            if best is None or shapely.distance(tree.left.boundary, point) < shapely.distance(best, point):
-                best = find_nearest_neighbor_internal(tree.left, point, best)
+            nearest, min_distance = find_nearest_neighbor_internal(tree.right, point, nearest, min_distance)
+            if shapely.distance(tree.left.boundary, point) < min_distance:
+                nearest, min_distance = find_nearest_neighbor_internal(tree.left, point, nearest, min_distance)
 
-    return best
+    return nearest, min_distance
 
 
+def get_nearest(shapes: List[Geometry], point: Point):
+    min_distance = float('inf')
+    nearest = None
+
+    for shape in shapes:
+        distance = shapely.distance(point, shape)
+
+        if distance < min_distance:
+            min_distance = distance
+            nearest = shape
+
+    return nearest, min_distance
+
+
+# Поиск с минимальным расстоянием
+# Сначала ищем минимальное расстояние в листе
+# Потом заходим только в узлы до которых расстояние меньше найденного
+# В этих узлах ищем самый близкий элемент
 def find_nearest_neighbor_2(tree: KDTree, point: Point):
     min_dist = min_dist_nearest_neighbor_2(tree, point, tree)
     return find_nearest_neighbor_2_internal(tree, point, min_dist)
@@ -157,23 +162,6 @@ def min_dist_nearest_neighbor_2(tree: KDTree, point: Point, root: KDTree):
         dist = min_dist_nearest_neighbor_2(tree.right, point, root)
 
     return min(best_dist, dist) if best_dist is not None else dist
-
-    # print(f'best_dist {best_dist}')
-    #
-    # add_to_plot_geometry(root.boundary, 'black')
-    #
-    # plot_kd_tree(root, tree.depth)
-    #
-    # for shape in tree.shapes:
-    #     add_to_plot_geometry(shape, 'orange')
-    #     shortest_line = LineString(shapely.shortest_line(shape, point))
-    #     print(shortest_line.length)
-    #     add_to_plot_geometry(shortest_line, 'red')
-    #
-    # add_to_plot_geometry(point, 'red')
-    #
-    # set_title(f'depth {tree.depth}')
-    # show_plot()
 
 
 # TODO rename, refactor
@@ -232,22 +220,10 @@ def plot_kd_tree(tree: KDTree):
     plot_kd_tree(tree.left)
     plot_kd_tree(tree.right)
 
-# def plot_kd_tree(tree: KDTree, depth: int):
-#     if tree is None or tree.depth > depth:
-#         return
-#
-#     if tree.depth == depth:
-#         # Деление плоскости
-#         if tree.left is not None:
-#             add_to_plot_geometry(tree.left.boundary, 'black')
-#
-#         add_to_plot_geometry(tree.boundary, 'red')
-#     else:
-#         add_to_plot_geometry(tree.boundary, 'black')
-#
-#     plot_kd_tree(tree.left, depth)
-#
-#     plot_kd_tree(tree.right, depth)
-#
-#     for shape in tree.shapes:
-#         add_to_plot_geometry(shape, 'yellow')
+
+def kd_tree_benchmark_build(boundary: Polygon, shapes: List[shapely.Geometry]):
+    return timeit.Timer(lambda: build_kd_tree(boundary, shapes)).timeit(1)
+
+
+def kd_tree_benchmark_find_nearest_neighbor(tree: KDTree, query_point: Point):
+    return timeit.Timer(lambda: kd_tree_find_nearest_neighbor(tree, query_point)).timeit(1)
