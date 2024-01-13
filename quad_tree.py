@@ -102,7 +102,8 @@ def build_quad_tree(boundary: Polygon, shapes: List[shapely.Geometry], bucket_ca
 
 
 def quad_tree_find_nearest_neighbor(tree: Quadtree, point: Point):
-    return find_nearest_neighbor_internal(tree, point, None, float('inf'))
+    nearest, _ = find_nearest_neighbor_internal(tree, point, None, float('inf'))
+    return nearest
 
 
 def find_nearest_neighbor_internal(tree: Quadtree, point: Point, nearest: Geometry | None, min_distance):
@@ -113,15 +114,17 @@ def find_nearest_neighbor_internal(tree: Quadtree, point: Point, nearest: Geomet
 
     if distance < min_distance:
         nearest = candidate
+        min_distance = distance
 
     if not tree.is_leaf():
         nodes = [tree.top_left, tree.top_right, tree.bottom_right, tree.bottom_left]
         for i in range(len(nodes)):
             if nodes[i].boundary.contains(point):
                 nearest, min_distance = find_nearest_neighbor_internal(nodes[i], point, nearest, min_distance)
+
                 for j in filter(lambda jj: jj != i, range(len(nodes))):
                     if shapely.distance(nodes[j].boundary, point) < min_distance:
-                        nearest = find_nearest_neighbor_internal(nodes[j], point, nearest, min_distance)
+                        nearest, min_distance = find_nearest_neighbor_internal(nodes[j], point, nearest, min_distance)
 
     return nearest, min_distance
 

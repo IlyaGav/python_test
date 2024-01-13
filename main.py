@@ -1,9 +1,7 @@
 import random
 import time
-from collections import namedtuple
 
 import shapely
-from shapely import unary_union
 from shapely.geometry import Point, LineString, Polygon
 
 from fixed_grid import fixed_grid_find_nearest_neighbor, plot_fixed_grid, build_fixed_grid, fixed_grid_benchmark_build, \
@@ -55,28 +53,12 @@ def generate_box(xmin, ymin, xmax, ymax):
     return Polygon([(xmin, ymin), (xmin, ymax), (xmax, ymax), (xmax, ymin)])
 
 
-seed = int(time.time())
-# seed = 1705134058
-# seed = 1705094261
-random.seed(seed)
-print(f"random seed {seed}")
-
-# boundary = shapely.box(0, 0, 100, 100)
-
-
-import timeit
-
-
-def d(setup):
-    pass
-
-
 def benchmark():
-    min_x, min_y, max_x, max_y = 0, 0, 1_000_000, 1_000_000
+    min_x, min_y, max_x, max_y = 0, 0, 100_000, 100_000
 
     min_length, max_length = 1, 15
 
-    count_data = 100_000_000
+    count_data = 1_000_000
 
     boundary = shapely.box(min_x, min_y, max_x, max_y)
 
@@ -115,63 +97,44 @@ def benchmark():
     print()
 
 
+seed = int(time.time())
+# seed = 1705134058
+# seed = 1705094261
+random.seed(seed)
+print(f"random seed {seed}")
+
+boundary = shapely.box(0, 0, 100, 100)
+
+shapes = [generate_random_box() for _ in range(100)]
+# shapes = []
+# shapes.append(generate_box(1, 1, 30, 30))
+# shapes.append(generate_box(10, 52, 35, 80))
+
+point = generate_random_point()
+# point = Point(4, 48)
+
+kd_tree = build_kd_tree(boundary, shapes)
+plot_kd_tree(kd_tree)
+nearest_neighbor = kd_tree_find_nearest_neighbor(kd_tree, point)
+add_to_plot_geometry(nearest_neighbor, 'red')
+add_to_plot_geometry(point)
+set_title('kd_tree')
+show_plot()
+
+quad_tree = build_quad_tree(boundary, shapes)
+plot_quad_tree(quad_tree)
+nearest_neighbor = quad_tree_find_nearest_neighbor(quad_tree, point)
+add_to_plot_geometry(nearest_neighbor, 'red')
+add_to_plot_geometry(point)
+set_title('quad_tree')
+show_plot()
+
+grid = build_fixed_grid(boundary, shapes)
+plot_fixed_grid(grid)
+nearest_neighbor = fixed_grid_find_nearest_neighbor(grid, point)
+add_to_plot_geometry(nearest_neighbor, 'red')
+add_to_plot_geometry(point)
+set_title('grid')
+show_plot()
+
 benchmark()
-
-# shapes = [generate_random_box() for _ in range(100)]
-# # shapes = []
-# # shapes.append(generate_box(1, 1, 30, 30))
-# # shapes.append(generate_box(10, 52, 35, 80))
-#
-# boundary = shapely.box(0, 0, 100, 100)
-#
-# point = generate_random_point()
-# # point = Point(4, 48)
-#
-# kd_tree = build_kd_tree(boundary, shapes)
-# plot_kd_tree(kd_tree)
-# nearest_neighbor = kd_tree_find_nearest_neighbor(kd_tree, point)
-# add_to_plot_geometry(nearest_neighbor, 'red')
-# add_to_plot_geometry(point)
-# set_title('kd_tree')
-# show_plot()
-#
-# quad_tree = build_quad_tree(boundary, shapes)
-# plot_quad_tree(quad_tree)
-# nearest_neighbor = quad_tree_find_nearest_neighbor(quad_tree, point)
-# add_to_plot_geometry(nearest_neighbor, 'red')
-# add_to_plot_geometry(point)
-# set_title('quad_tree')
-# show_plot()
-#
-# grid = build_grid(boundary, shapes)
-# plot_grid(grid)
-# nearest_neighbor = grid_find_nearest_neighbor(grid, point)
-# add_to_plot_geometry(nearest_neighbor, 'red')
-# add_to_plot_geometry(point)
-# set_title('grid')
-# show_plot()
-
-# x, y, r = 5, 5, 3
-#
-# for p in list(set(circular_traversal(x, y, r))):
-#     add_to_plot_geometry(Point(p[0], p[1]), 'red')
-# set_title('circular_traversal')
-# show_plot()
-#
-#
-# for p in list(set(circular_traversal_2(x, y, r))):
-#     add_to_plot_geometry(Point(p[0], p[1]), 'red')
-# set_title('circular_traversal_2')
-# show_plot()
-#
-# for p in list(set(circular_traversal_3(x, y, r))):
-#     add_to_plot_geometry(Point(p[0], p[1]), 'red')
-# set_title('circular_traversal_3')
-# show_plot()
-
-
-# Вывод сетки на консоль
-# print_grid(grid)
-
-# Выводим результат
-# print(f"Nearest neighbor (query rect):", nearest_neighbor)

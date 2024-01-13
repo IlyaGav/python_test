@@ -97,7 +97,8 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
 
 
 def kd_tree_find_nearest_neighbor(tree: KDTree, point: Point):
-    return find_nearest_neighbor_internal(tree, point, None, float('inf'))
+    nearest, _ = find_nearest_neighbor_internal(tree, point, None, float('inf'))
+    return nearest
 
 
 def find_nearest_neighbor_internal(tree: KDTree, point: Point, nearest: Geometry | None, min_distance):
@@ -108,6 +109,7 @@ def find_nearest_neighbor_internal(tree: KDTree, point: Point, nearest: Geometry
 
     if distance < min_distance:
         nearest = candidate
+        min_distance = distance
 
     if not tree.is_leaf():
         if tree.left.boundary.contains(point):
