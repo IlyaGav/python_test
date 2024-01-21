@@ -10,37 +10,108 @@ from shapely_plot import add_to_plot_geometry
 
 
 class KDTree(object):
-    def __init__(self, boundary: Polygon, shapes: List[Geometry], depth, left: 'KDTree' = None,
-                 right: 'KDTree' = None):
+    def __init__(self, boundary: Polygon, shapes: List[Geometry], depth, bucket_capacity, max_depth,
+                 median: float = None, left: 'KDTree' = None, right: 'KDTree' = None):
+        self.median = median
         self.boundary = boundary
         self.shapes = shapes
         self.depth = depth
         self.left = left
         self.right = right
 
-        # TODO
-        # self._max_depth = 8
+        # TODO Эти параметры учитываются только при динамическом добавлении
+        self.bucket_capacity = bucket_capacity
+        self.max_depth = max_depth
 
     def is_leaf(self):
-        return self.left is None and self.right is None
+        return self.left is None or self.right is None
 
+    def insert(self, shape: Geometry):
+        if not self.boundary.contains(shapely.envelope(shape)):
+            raise ValueError("ElementOutside")
 
-def get_containing_child(tree: KDTree, boundary: shapely.Polygon):
-    if tree.is_leaf:
+        if len(self.shapes) >= self.bucket_capacity:
+            self.split()
+
+        containing_child = self.get_containing_child(shape)
+        if containing_child is not None:
+            containing_child.insert(shape)
+        else:
+            self.shapes.append(shape)
+
+    def split(self):
+        if not self.is_leaf():
+            return
+
+        k = 2  # двумерное пространство
+        axis = self.depth % k
+
+        depth = self.depth + 1
+
+        if depth > self.max_depth:
+            return
+
+        median = find_median(self.shapes, axis)
+
+        minx, miny, maxx, maxy = self.boundary.bounds
+
+        self.median = median
+
+        if axis == 0:
+            self.left = KDTree(MultiPoint([(minx, miny), (median, maxy)]).envelope, [], depth, self.bucket_capacity,
+                               self.max_depth)
+            self.right = KDTree(MultiPoint([(median, miny), (maxx, maxy)]).envelope, [], depth, self.bucket_capacity,
+                                self.max_depth)
+        else:
+            self.left = KDTree(MultiPoint([(minx, miny), (maxx, median)]).envelope, [], depth, self.bucket_capacity,
+                               self.max_depth)
+            self.right = KDTree(MultiPoint([(minx, median), (maxx, maxy)]).envelope, [], depth, self.bucket_capacity,
+                                self.max_depth)
+
+        shapes = self.shapes.copy()
+
+        for shape in shapes:
+            containing_child = self.get_containing_child(shapely.envelope(shape))
+            if containing_child is not None:
+                self.shapes.remove(shape)
+                containing_child.insert(shape)
+
+    def get_containing_child(self: KDTree, shape: Geometry):
+        if self.is_leaf():
+            return None
+
+        boundary = shapely.envelope(shape)
+
+        if self.left.boundary.contains(boundary):
+            return self.left
+
+        if self.right.boundary.contains(boundary):
+            return self.right
+
         return None
 
-    if tree.left.boundary.contains(boundary):
-        return tree.left
 
-    if tree.right.boundary.contains(boundary):
-        return tree.right
+def build_kd_tree_2(boundary: Polygon, shapes: List[shapely.Geometry], bucket_capacity: int = 8, max_depth: int = 8):
+    if not shapes or len(shapes) == 0:
+        return None
 
-    return None
+    tree = KDTree(boundary, [], 0, bucket_capacity, max_depth)
+
+    for shape in shapes:
+        tree.insert(shape)
+
+    return tree
 
 
 def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
     if not shapes or len(shapes) == 0:
-        return None
+        return KDTree(
+            boundary=boundary,
+            shapes=[],
+            depth=depth,
+            # TODO Эти параметры не учитываются в этой функции добавления
+            bucket_capacity=8,
+            max_depth=8)
 
     k = 2  # двумерное пространство
     axis = depth % k
@@ -50,11 +121,11 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
     minx, miny, maxx, maxy = boundary.bounds
 
     if axis == 0:
-        left_boundary = MultiPoint([(minx, miny), (median, maxy)]).envelope
-        right_boundary = MultiPoint([(median, miny), (maxx, maxy)]).envelope
+        left_boundary = shapely.box(minx, miny, median, maxy)
+        right_boundary = shapely.box(median, miny, maxx, maxy)
     else:
-        left_boundary = MultiPoint([(minx, miny), (maxx, median)]).envelope
-        right_boundary = MultiPoint([(minx, median), (maxx, maxy)]).envelope
+        left_boundary = shapely.box(minx, miny, maxx, median)
+        right_boundary = shapely.box(minx, median, maxx, maxy)
 
     self = []
     left = []
@@ -63,8 +134,8 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
     for shape in shapes:
         mbr = Polygon(shapely.envelope(shape))
         vertices = list(mbr.exterior.coords)
-
-        if all(vertex[axis] < median for vertex in vertices):
+        # TODO Сравнивать не каждую координату, а только противоположенные
+        if all(vertex[axis] <= median for vertex in vertices):
             left.append(shape)
         elif all(vertex[axis] > median for vertex in vertices):
             right.append(shape)
@@ -91,6 +162,10 @@ def build_kd_tree(boundary: Polygon, shapes: List[shapely.Geometry], depth=0):
         boundary=boundary,
         shapes=self,
         depth=depth,
+        # TODO Эти параметры не учитываются в этой функции добавления
+        bucket_capacity=8,
+        max_depth=8,
+        median=median,
         left=build_kd_tree(left_boundary, left, depth + 1),
         right=build_kd_tree(right_boundary, right, depth + 1)
     )
@@ -102,8 +177,8 @@ def kd_tree_find_nearest_neighbor(tree: KDTree, point: Point):
 
 
 def find_nearest_neighbor_internal(tree: KDTree, point: Point, nearest: Geometry | None, min_distance):
-    if tree is None:
-        return nearest
+    if tree is None or tree.is_leaf():
+        return nearest, min_distance
 
     candidate, distance = get_nearest(tree.shapes, point)
 
@@ -111,15 +186,18 @@ def find_nearest_neighbor_internal(tree: KDTree, point: Point, nearest: Geometry
         nearest = candidate
         min_distance = distance
 
-    if not tree.is_leaf():
-        if tree.left.boundary.contains(point):
-            nearest, min_distance = find_nearest_neighbor_internal(tree.left, point, nearest, min_distance)
-            if shapely.distance(tree.right.boundary, point) < min_distance:
-                nearest, min_distance = find_nearest_neighbor_internal(tree.right, point, nearest, min_distance)
-        elif tree.right.boundary.contains(point):
+    k = 2  # двумерное пространство
+    axis = tree.depth % k
+    point_tuple = [point.x, point.y]
+
+    if tree.median >= point_tuple[axis]:
+        nearest, min_distance = find_nearest_neighbor_internal(tree.left, point, nearest, min_distance)
+        if tree.median - point_tuple[axis] < min_distance:
             nearest, min_distance = find_nearest_neighbor_internal(tree.right, point, nearest, min_distance)
-            if shapely.distance(tree.left.boundary, point) < min_distance:
-                nearest, min_distance = find_nearest_neighbor_internal(tree.left, point, nearest, min_distance)
+    else:
+        nearest, min_distance = find_nearest_neighbor_internal(tree.right, point, nearest, min_distance)
+        if point_tuple[axis] - tree.median < min_distance:
+            nearest, min_distance = find_nearest_neighbor_internal(tree.left, point, nearest, min_distance)
 
     return nearest, min_distance
 
@@ -166,7 +244,7 @@ def min_dist_nearest_neighbor_2(tree: KDTree, point: Point, root: KDTree):
     return min(best_dist, dist) if best_dist is not None else dist
 
 
-# TODO rename, refactor
+# TODO rename, refactor, .distance
 def find_nearest_neighbor_2_internal(tree: KDTree, point: Point, radius: int):
     # TODO Или пересечение или расстояние меньше радиуса
     shapes = list(filter(lambda s: shapely.distance(s, point) <= radius, tree.shapes))
@@ -211,13 +289,24 @@ def find_median(geometries: List[Geometry], axes):
 
 
 def plot_kd_tree(tree: KDTree):
-    add_to_plot_geometry(tree.boundary, 'black')
-
-    for shape in tree.shapes:
-        add_to_plot_geometry(shape, 'orange')
+    if tree.depth == 0:
+        add_to_plot_geometry(tree.boundary, 'black')
 
     if tree.is_leaf():
         return
+
+    k = 2  # двумерное пространство
+    axis = tree.depth % k
+
+    minx, miny, maxx, maxy = tree.boundary.bounds
+
+    if axis == 0:
+        add_to_plot_geometry(shapely.geometry.LineString([(tree.median, miny), (tree.median, maxy)]), 'black')
+    else:
+        add_to_plot_geometry(shapely.geometry.LineString([(minx, tree.median), (maxx, tree.median)]), 'black')
+
+    for shape in tree.shapes:
+        add_to_plot_geometry(shape, 'orange')
 
     plot_kd_tree(tree.left)
     plot_kd_tree(tree.right)
@@ -225,6 +314,10 @@ def plot_kd_tree(tree: KDTree):
 
 def kd_tree_benchmark_build(boundary: Polygon, shapes: List[shapely.Geometry]):
     return timeit.Timer(lambda: build_kd_tree(boundary, shapes)).timeit(1)
+
+
+def kd_tree_benchmark_build_2(boundary: Polygon, shapes: List[shapely.Geometry]):
+    return timeit.Timer(lambda: build_kd_tree_2(boundary, shapes)).timeit(1)
 
 
 def kd_tree_benchmark_find_nearest_neighbor(tree: KDTree, query_point: Point):

@@ -23,10 +23,14 @@ class Quadtree(object):
         self.bottom_right: Quadtree | None = None
 
         self.shapes = []
+        self.minx, self.miny, self.maxx, self.maxy = boundary.bounds
 
     def is_leaf(self):
         return (self.top_left is None or self.top_right is None or
                 self.bottom_left is None or self.bottom_right is None)
+
+    def contains(self, point: Point) -> bool:
+        return (self.minx <= point.x <= self.maxx) and (self.miny <= point.y <= self.maxy)
 
     def insert(self, shape: Geometry):
         if not self.boundary.contains(shapely.envelope(shape)):
@@ -117,14 +121,12 @@ def find_nearest_neighbor_internal(tree: Quadtree, point: Point, nearest: Geomet
         min_distance = distance
 
     if not tree.is_leaf():
-        nodes = [tree.top_left, tree.top_right, tree.bottom_right, tree.bottom_left]
-        for i in range(len(nodes)):
-            if nodes[i].boundary.contains(point):
-                nearest, min_distance = find_nearest_neighbor_internal(nodes[i], point, nearest, min_distance)
-
-                for j in filter(lambda jj: jj != i, range(len(nodes))):
-                    if shapely.distance(nodes[j].boundary, point) < min_distance:
-                        nearest, min_distance = find_nearest_neighbor_internal(nodes[j], point, nearest, min_distance)
+        nodes = list(map(lambda n: [n, shapely.distance(n.boundary, point)],
+                         [tree.top_left, tree.top_right, tree.bottom_right, tree.bottom_left]))
+        nodes = sorted(nodes, key=lambda n: n[1])
+        for node in nodes:
+            if node[1] < min_distance:
+                nearest, min_distance = find_nearest_neighbor_internal(node[0], point, nearest, min_distance)
 
     return nearest, min_distance
 
