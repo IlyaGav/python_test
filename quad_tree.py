@@ -29,8 +29,8 @@ class Quadtree(object):
         return (self.top_left is None or self.top_right is None or
                 self.bottom_left is None or self.bottom_right is None)
 
-    def contains(self, point: Point) -> bool:
-        return (self.minx <= point.x <= self.maxx) and (self.miny <= point.y <= self.maxy)
+    # def contains(self, point: Point) -> bool:
+    #     return (self.minx <= point.x <= self.maxx) and (self.miny <= point.y <= self.maxy)
 
     def insert(self, shape: Geometry):
         if not self.boundary.contains(shapely.envelope(shape)):

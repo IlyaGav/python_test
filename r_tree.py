@@ -4,7 +4,7 @@ import random
 from typing import List, Union
 
 import shapely
-from shapely import Polygon, Geometry
+from shapely import Polygon, Geometry, Point
 
 from shapely_plot import add_to_plot_geometry
 
@@ -43,8 +43,11 @@ class BoundaryBox:
         self.x_max = x_max
         self.y_max = y_max
 
+        self.boundary = shapely.box(self.x_min, self.y_min, self.x_max, self.y_max)
+
     def area(self) -> float:
         return (self.x_max - self.x_min) * (self.y_max - self.y_min)
+
 
 
 class Entry(BoundaryBox):
@@ -67,6 +70,8 @@ class RTreeNode(BoundaryBox):
     def updateMBR(self, box: BoundaryBox):
         mbr = union(self, box)
         self.x_min, self.y_min, self.x_max, self.y_max = mbr.x_min, mbr.y_min, mbr.x_max, mbr.y_max
+        self.boundary = shapely.box(self.x_min, self.y_min, self.x_max, self.y_max)
+
 
 
 class RTree(object):
@@ -92,6 +97,30 @@ class RTree(object):
             return list(map(lambda e: box_to_geometry(e), entries))
         else:
             return None
+
+    def find_nearest_neighbor(self, point: Point):
+        nearest, _ = self.find_nearest_neighbor_internal(self.root, point, None, float('inf'))
+        return nearest
+
+    def find_nearest_neighbor_internal(self, node: RTreeNode, point: Point, nearest: Geometry | None, min_distance):
+        if node.is_leaf:
+            entries = list(map(lambda e: e.shape, node.children))
+            candidate, distance = get_nearest(entries, point)
+
+            if distance < min_distance:
+                nearest = candidate
+                min_distance = distance
+
+            return nearest, min_distance
+
+        nodes = list(map(lambda n: [n, shapely.distance(n.boundary, point)], node.children))
+        nodes = sorted(nodes, key=lambda n: n[1])
+
+        for node in nodes:
+            if node[1] < min_distance:
+                nearest, min_distance = self.find_nearest_neighbor_internal(node[0], point, nearest, min_distance)
+
+        return nearest, min_distance
 
     def internal_search(self, node: RTreeNode, search_box: BoundaryBox) -> List[Entry]:
         search_result: List[Entry] | None = []
@@ -162,6 +191,10 @@ class RTree(object):
                 node_2.updateMBR(child)
 
         return node_1, node_2
+
+    def remove(self):
+        # TODO
+        self.split_node(None)
 
 
 class DimStats:
@@ -308,3 +341,21 @@ def build_r_tree(entries: List[Geometry], max_node_capacity, algorithm: TypeAlgo
         tree.insert(entry)
 
     return tree
+
+
+def distance_func(shape: Geometry, point: Point):
+    return shapely.distance(point, shape)
+
+
+def get_nearest(shapes: List[Geometry], point: Point):
+    min_distance = float('inf')
+    nearest = None
+
+    for shape in shapes:
+        distance = shapely.distance(shape, point)
+
+        if distance < min_distance:
+            min_distance = distance
+            nearest = shape
+
+    return nearest, min_distance
