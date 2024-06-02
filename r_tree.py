@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import List
+import random
+from typing import List, Union
 
 import shapely
 from shapely import Polygon, Geometry
@@ -17,37 +18,6 @@ def union(*boundaries: BoundaryBox):
         maxx, maxy = max(boundary.x_max, maxx), max(boundary.y_max, maxy)
 
     return BoundaryBox(minx, miny, maxx, maxy)
-
-
-def enlargement(boundary_1: BoundaryBox, boundary_2: BoundaryBox):
-    union_bbox = union(boundary_1, boundary_2)
-    return union_bbox.area() - boundary_2.area()
-
-
-def split_node(node: RTreeNode) -> [RTreeNode]:
-    if node.children is None:
-        raise ValueError("Can not be None")
-
-    lowIdx, highIdx = linear(node.children)
-
-    node_1 = RTreeNode([node.children[lowIdx]], node.is_leaf)
-    node_2 = RTreeNode([node.children[highIdx]], node.is_leaf)
-
-    node.children.remove(node_1.children[0])
-    node.children.remove(node_2.children[0])
-
-    for child in node.children:
-        increase_1 = enlargement(node_1, child)
-        increase_2 = enlargement(node_2, child)
-
-        if increase_1 < increase_2 or increase_1 == increase_2 and node_1.area() < node_2.area():
-            node_1.add_child(child)
-            node_1.updateMBR(child)
-        else:
-            node_2.add_child(child)
-            node_2.updateMBR(child)
-
-    return node_1, node_2
 
 
 def intersection(rect1: BoundaryBox, rect2: BoundaryBox) -> bool:
@@ -79,7 +49,7 @@ class BoundaryBox:
 
 class Entry(BoundaryBox):
     def __init__(self, shape: Geometry):
-        x_min, y_min, x_max, y_max = Polygon(shapely.envelope(shape)).bounds
+        x_min, y_min, x_max, y_max = (shapely.envelope(shape)).bounds
         super().__init__(x_min, y_min, x_max, y_max)
         self.shape = shape
 
@@ -100,9 +70,10 @@ class RTreeNode(BoundaryBox):
 
 
 class RTree(object):
-    def __init__(self, max_node_capacity=4):
+    def __init__(self, max_node_capacity=4, algorithm: 'linear' | 'quadratic' = 'linear'):
         self.root = RTreeNode([], True)
         self.max_node_capacity = max_node_capacity
+        self.algorithm = algorithm
 
     def insert(self, shape: Geometry):
         entry = Entry(shape)
@@ -110,7 +81,7 @@ class RTree(object):
         self.root.children = self.internal_insert(self.root, entry)
 
         if len(self.root.children) > self.max_node_capacity:
-            node_1, node_2 = split_node(self.root)
+            node_1, node_2 = self.split_node(self.root, self.algorithm)
             self.root = RTreeNode([node_1, node_2])
 
     def search(self, search: Geometry):
@@ -142,17 +113,17 @@ class RTree(object):
             selected_node = None
 
             for child in node.children:
-                increase = enlargement(child, entry)
+                increase = union(child, entry).area() - child.area()
                 if increase < min_increase:
                     min_increase = increase
                     selected_node = child
-                elif increase == min_increase and child.area < selected_node.area:
+                elif increase == min_increase and child.area() < selected_node.area():
                     selected_node = child
 
             selected_node.children = self.internal_insert(selected_node, entry)
 
             if len(selected_node.children) > self.max_node_capacity:
-                node_1, node_2 = split_node(selected_node)
+                node_1, node_2 = self.split_node(selected_node, self.algorithm)
                 node.children.remove(selected_node)
                 node.add_child(node_1)
                 node.add_child(node_2)
@@ -160,6 +131,37 @@ class RTree(object):
         node.updateMBR(entry)
 
         return node.children
+
+    def split_node(self, node: RTreeNode, algorithm: 'linear' | 'quadratic') -> [RTreeNode]:
+        if node.children is None:
+            raise ValueError("Can not be None")
+
+        lowIdx, highIdx = linear(node.children) if algorithm == 'linear' else quadratic(node.children)
+
+        node_1 = RTreeNode([node.children[lowIdx]], node.is_leaf)
+        node_2 = RTreeNode([node.children[highIdx]], node.is_leaf)
+
+        node.children.remove(node_1.children[0])
+        node.children.remove(node_2.children[0])
+
+        while len(node.children) > 0:
+            idx = next_linear(node.children) if algorithm == 'linear' else next_quadratic(node.children, node_1, node_2)
+            child = node.children.pop(idx)
+
+            increase_1 = union(node_1, child).area() - node_1.area()
+            increase_2 = union(node_2, child).area() - node_2.area()
+
+            if len(node_1.children) < self.max_node_capacity and (
+                    increase_1 < increase_2 or increase_1 == increase_2 and node_1.area() < node_2.area()
+                    or len(node_1.children) < len(node_2.children)
+            ):
+                node_1.add_child(child)
+                node_1.updateMBR(child)
+            else:
+                node_2.add_child(child)
+                node_2.updateMBR(child)
+
+        return node_1, node_2
 
 
 class DimStats:
@@ -216,12 +218,70 @@ def linear(entries: List[BoundaryBox]):
         return 0, highIdx
 
 
+def quadratic(entries: List[BoundaryBox]):
+    x = 0
+    y = 1
+    max_diff = float('-inf')
+
+    if len(entries) > 2:
+        for i in range(len(entries)):
+            for j in range(1, len(entries)):
+                combined = union(entries[i], entries[j])
+                diff = combined.area() - entries[i].area() - entries[j].area()
+
+                if diff > max_diff:
+                    max_diff = diff
+                    x = i
+                    y = j
+
+    return x, y
+
+
+def select_group(rect1: BoundaryBox, rect2: BoundaryBox, len1: int, len2: int, diff1: float, diff2: float):
+    if diff1 < diff2:
+        return 0
+    elif diff2 < diff1:
+        return 1
+    elif rect1.area() < rect2.area():
+        return 0
+    elif rect2.area() < rect1.area():
+        return 1
+    elif len1 < len2:
+        return 0
+    elif len2 < len1:
+        return 1
+    else:
+        return 0
+
+
+def next_quadratic(entries: List[BoundaryBox], rect1: BoundaryBox, rect2: BoundaryBox):
+    idx = 0
+
+    max_preference_diff = float('-inf')
+
+    for i, e in enumerate(entries):
+        pref1 = union(rect1, e).area() - rect1.area()
+        pref2 = union(rect2, e).area() - rect2.area()
+        preference_diff = abs(pref1 - pref2)
+
+        if max_preference_diff <= preference_diff:
+            max_preference_diff = preference_diff
+            idx = i
+
+    return idx
+
+
+def next_linear(entries: List[BoundaryBox]):
+    return random.randint(0, len(entries) - 1)
+
+
 def plot_r_tree(r_tree: RTree):
     plot_r_node_recursive(r_tree.root, 0)
 
 
 def plot_get_color(depth: int):
-    return ['orange', 'black', 'grey', 'blue'][depth]
+    return 'white' if depth == 0 else 'black'
+    # return ['orange', 'black', 'grey', 'blue', 'brown', 'violet', 'pink', 'purple', 'indigo'][depth]
 
 
 def plot_r_node(node: RTreeNode, color: str):
@@ -236,3 +296,15 @@ def plot_r_node_recursive(node: RTreeNode, depth: int):
 
     for child in node.children:
         plot_r_node_recursive(child, depth + 1)
+
+
+TypeAlgorithm = Union['linear', 'quadratic']
+
+
+def build_r_tree(entries: List[Geometry], max_node_capacity, algorithm: TypeAlgorithm):
+    tree = RTree(max_node_capacity, algorithm)
+
+    for entry in entries:
+        tree.insert(entry)
+
+    return tree

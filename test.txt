@@ -1,0 +1,75 @@
+random seed 1705233419
+generate data...
+start build benchmark
+
+kd_tree_build 45.33614739996847
+kd_tree_build_2 21.436884200025816
+quad_tree_build 24.16652470000554
+fixed_grid_build 1.369046800013166
+
+
+start nearest_neighbor benchmark
+building...
+
+kd_tree_nearest_neighbor 0.0006016000406816602
+kd_tree_2_nearest_neighbor 0.0020732000120915473
+quad_tree_nearest_neighbor 0.0006279000081121922
+fixed_grid_nearest_neighbor 0.00023980002151802182
+
+
+Process finished with exit code 0
+
+random seed 1705233419
+generate data...
+start build benchmark
+
+kd_tree_build 40.18085889995564
+kd_tree_build_2 22.21668579999823
+quad_tree_build 23.84034510003403
+fixed_grid_build 1.345434800023213
+
+
+start nearest_neighbor benchmark
+building...
+
+kd_tree_nearest_neighbor 0.0003988000098615885
+kd_tree_2_nearest_neighbor 0.00019839999731630087
+quad_tree_nearest_neighbor 0.0007102999952621758
+fixed_grid_nearest_neighbor 0.0003200999926775694
+
+
+random seed 1705233419
+generate data...
+start build benchmark
+
+kd_tree_build 37.687329399981536
+kd_tree_build_2 20.943239599990193
+quad_tree_build 23.863233599986415
+fixed_grid_build 1.352058099990245
+
+
+start nearest_neighbor benchmark
+building...
+
+kd_tree_nearest_neighbor 0.0004254999803379178
+kd_tree_2_nearest_neighbor 0.00020830001449212432
+quad_tree_nearest_neighbor 0.0007223999709822237
+fixed_grid_nearest_neighbor 0.00032320001628249884
+
+
+
+Process finished with exit code 0
+
+
+kaliningrad
+
+random seed 1705335687
+start nearest_neighbor benchmark
+building...
+kd_tree_build 51.25691819190979
+quad_tree_build 36.099973917007446
+fixed_grid_build 1.674027919769287
+
+kd_tree_nearest_neighbor 0.009966611862182617
+quad_tree_nearest_neighbor 0.0009965896606445312
+fixed_grid_nearest_neighbor 0.015949010848999023

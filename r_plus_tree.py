@@ -21,7 +21,7 @@ class BoundaryBox:
 
 class Entry(BoundaryBox):
     def __init__(self, shape: Geometry):
-        x_min, y_min, x_max, y_max = Polygon(shapely.envelope(shape)).bounds
+        x_min, y_min, x_max, y_max = (shapely.envelope(shape)).bounds
         super().__init__(x_min, y_min, x_max, y_max)
         self.shape = shape
 
@@ -35,7 +35,7 @@ class RPlusTreeNode(BoundaryBox):
         self.parent = parent
         self.is_leaf = is_leaf
 
-    def add_child(self, node: 'RPlusTreeNode' | Entry):
+    def add_child(self, node: RPlusTreeNode | Entry):
         self.children.append(node)
 
 
@@ -48,11 +48,6 @@ def union(*boundaries: BoundaryBox):
         maxx, maxy = max(boundary.x_max, maxx), max(boundary.y_max, maxy)
 
     return BoundaryBox(minx, miny, maxx, maxy)
-
-
-def enlargement(boundary_1: BoundaryBox, boundary_2: BoundaryBox):
-    union_bbox = union(boundary_1, boundary_2)
-    return union_bbox.area() - boundary_2.area()
 
 
 def intersection(rect1: BoundaryBox, rect2: BoundaryBox) -> bool:
@@ -75,18 +70,30 @@ def _sweep(children: List[RPlusTreeNode], axis):
     temp_left = [child.x_min if axis == 0 else child.y_min for child in children]
     temp_right = [child.x_max if axis == 0 else child.y_max for child in children]
 
-    temp_left.sort()
-    temp_right.sort()
+    # temp_left.sort()
+    # temp_right.sort()
+    #
+    # if temp_left[0] == temp_left[-1] or temp_right[0] == temp_right[-1]:
+    #     return float('-inf')
+    #
+    # cutLine = temp_left[len(children) // 2]
+    # if temp_left[0] == cutLine:
+    #     for i in range(len(children) // 2 + 1, len(children)):
+    #         if temp_left[i] != cutLine:
+    #             cutLine = temp_left[i]
+    #             break
 
-    if temp_left[0] == temp_left[-1] or temp_right[0] == temp_right[-1]:
-        return float('-inf')
+    all_coords = [*temp_left, *temp_right]
+    all_coords.sort()
 
-    cutLine = temp_left[len(children) // 2]
-    if temp_left[0] == cutLine:
-        for i in range(len(children) // 2 + 1, len(children)):
-            if temp_left[i] != cutLine:
-                cutLine = temp_left[i]
-                break
+    if len(all_coords) % 2 == 1:
+        # Нечетное количество элементов, возвращаем одну точку
+        cutLine = all_coords[len(all_coords) // 2]
+    else:
+        # Четное количество элементов, возвращаем две точки
+        median_1 = all_coords[len(all_coords) // 2 - 1]
+        median_2 = all_coords[len(all_coords) // 2]
+        cutLine = (median_1 + median_2) / 2
 
     return cutLine
 
@@ -110,41 +117,42 @@ def _needCut(node: RPlusTreeNode, cut_info: List[int | float]):
 
     if (node.x_min if axis == 0 else node.y_min) < cutLine and (node.x_max if axis == 0 else node.y_max) <= cutLine:
         return 1
-    elif node.x_min if axis == 0 else node.y_min >= cutLine:
+    elif (node.x_min if axis == 0 else node.y_min) >= cutLine:
         return 2
     else:
         return 0
 
 
 def _partition(node: RPlusTreeNode | Entry, cut_info: List[int | float]):
-    print('_partition')
-    axis = cut_info[0]
+    axis = int(cut_info[0])
     cutLine = cut_info[1]
 
     if not isinstance(node, Entry):
         nn = [RPlusTreeNode(node.children.copy(), None, node.is_leaf),
               RPlusTreeNode(node.children.copy(), None, node.is_leaf)]
 
+        nn[0].children.clear()
+        nn[1].children.clear()
+
+        if axis == 0:
+            nn[0].x_min = node.x_min
+        else:
+            nn[0].y_min = node.y_min
+
         if axis == 0:
             nn[0].x_max = cutLine
         else:
             nn[0].y_max = cutLine
-        # (nn[0].x_max if axis == 0 else nn[0].y_max) = cutLine
-        # nn[0].dimensions[axis] = cutLine - nn[0].coords[axis]
 
         if axis == 0:
             nn[1].x_min = cutLine
         else:
             nn[1].y_min = cutLine
-        # (nn[1].x_min if axis == 0 else nn[1].y_min) = cutLine
-        # nn[1].coords[axis] = cutLine
 
         if axis == 0:
             nn[1].x_max = node.x_max
         else:
             nn[1].y_max = node.y_max
-        # (nn[1].x_max if axis == 0 else nn[1].y_max) = (node.x_max if axis == 0 else node.y_max)
-        # nn[1].dimensions[axis] = node.dimensions[axis] - nn[0].dimensions[axis]
 
         for child in node.children:
             result = _needCut(child, cut_info)
@@ -161,30 +169,32 @@ def _partition(node: RPlusTreeNode | Entry, cut_info: List[int | float]):
                 nn[1].add_child(splits[1])
                 splits[1].parent = nn[1]
 
+        # if len(nn[0].children) == 0 or len(nn[1].children) == 0:
+        #     print('asdad')
+
         return nn
     else:
         ee = [Entry(node.shape), Entry(node.shape)]
 
         if axis == 0:
+            ee[0].x_min = node.x_min
+        else:
+            ee[0].y_min = node.y_min
+
+        if axis == 0:
             ee[0].x_max = cutLine
         else:
             ee[0].y_max = cutLine
-        # (ee[0].x_max if axis == 0 else ee[0].y_max) = cutLine
-        # ee[0].dimensions[axis] = cutLine - ee[0].coords[axis]
 
         if axis == 0:
             ee[1].x_min = cutLine
         else:
             ee[1].y_min = cutLine
-        # (ee[1].x_min if axis == 0 else ee[1].y_min) = cutLine
-        # ee[1].coords[axis] = cutLine
 
         if axis == 0:
             ee[1].x_max = node.x_max
         else:
             ee[1].y_max = node.y_max
-        # (ee[1].x_max if axis == 0 else ee[1].y_max) = (node.x_max if axis == 0 else node.y_max)
-        # ee[1].dimensions[axis] = node.dimensions[axis] - ee[0].dimensions[axis]
 
         return ee
 
@@ -206,6 +216,9 @@ def _tighten(*nodes: RPlusTreeNode):
         minx, miny, = float('inf'), float('inf')
         maxx, maxy = float('-inf'), float('-inf')
 
+        # if len(node.children) == 0:
+        #     print('asdad')
+
         for child in node.children:
             child.parent = node
 
@@ -215,41 +228,20 @@ def _tighten(*nodes: RPlusTreeNode):
             maxx = max(maxx, child.x_max)
             maxy = max(maxy, child.y_max)
 
+        # if maxx == float('-inf') or miny == float('inf'):
+        #     print("sda")
+
         node.x_min, node.y_min = minx, miny
         node.x_max, node.y_max = maxx, maxy
 
 
-def _splitNode(node: RPlusTreeNode):
-    cc = node.children.copy()
-    node.children.clear()
-
-    nn = [node, RPlusTreeNode(node.children.copy(), node.parent, node.is_leaf)]
-
-    if nn[1].parent is not None:
-        nn[1].parent.add_child(nn[1])
-
-    cut_info = _evaluate(cc)
-
-    for child in cc:
-        result = _assign(child, cut_info)
-
-        if result[0] is not None:
-            nn[0].add_child(result[0])
-            result[0].parent = nn[0]
-
-        if result[1] is not None:
-            nn[1].add_child(result[1])
-            result[1].parent = nn[1]
-
-    _tighten(*nn)
-
-    return nn
-
-
 def _chooseLeaves(node: RPlusTreeNode, entry: Entry):
-    result: List[RPlusTreeNode] | None = []
+    result: List[RPlusTreeNode] = []
 
-    if node.is_leaf:
+    if node is None:
+        print('node is None')
+
+    if node.is_leaf or len(node.children) == 0:
         result.append(node)
     else:
         overlap = False
@@ -262,23 +254,26 @@ def _chooseLeaves(node: RPlusTreeNode, entry: Entry):
         if not overlap:
             min_increase = float('inf')
             next_node = None
+
             for child in node.children:
-                increase = enlargement(child, entry)
+                increase = union(child, entry).area() - child.area()
                 if increase < min_increase:
                     min_increase = increase
                     next_node = child
                 elif increase == min_increase and child.area() < next_node.area():
                     next_node = child
+
             result.extend(_chooseLeaves(next_node, entry))
 
     return result
 
 
+# TODO Получается, перекрытия разрешаются только при переполнении узла. При вставке элемента в несколько узлов,
+#  каждый узел увеличивается чтобы полностью содержать элемент => появляются перекрытия
 class RPlusTree(object):
     def __init__(self, max_node_capacity=4):
         self.root = RPlusTreeNode([], None, True)
         self.max_node_capacity = max_node_capacity
-        self.size = 0
 
     def insert(self, shape: Geometry):
         entry = Entry(shape)
@@ -286,16 +281,14 @@ class RPlusTree(object):
         leaves = _chooseLeaves(self.root, entry)
 
         for leaf in leaves:
-            leaf.children.append(entry)
+            leaf.add_child(entry)
             entry.parent = leaf
 
             if len(leaf.children) > self.max_node_capacity:
-                splits = _splitNode(leaf)
+                splits = self._splitNode(leaf)
                 self._adjustTree(splits[0], splits[1])
             else:
                 self._adjustTree(leaf, None)
-
-        self.size += 1
 
     def _adjustTree(self, node: RPlusTreeNode, new_node: RPlusTreeNode | None):
         if node == self.root:
@@ -316,7 +309,7 @@ class RPlusTree(object):
                 _tighten(new_node)
 
                 if len(node.parent.children) > self.max_node_capacity:
-                    splits = _splitNode(node.parent)
+                    splits = self._splitNode(node.parent)
                     self._adjustTree(splits[0], splits[1])
 
             if node.parent is not None:
@@ -343,13 +336,43 @@ class RPlusTree(object):
 
         return search_result
 
+    def _splitNode(self, node: RPlusTreeNode):
+        cc = node.children.copy()
+        node.children.clear()
+
+        nn = [node, RPlusTreeNode(node.children.copy(), node.parent, node.is_leaf)]
+
+        if nn[1].parent is not None:
+            nn[1].parent.add_child(nn[1])
+
+        cut_info = _evaluate(cc)
+
+        for child in cc:
+            result = _assign(child, cut_info)
+
+            if result[0] is not None:
+                nn[0].add_child(result[0])
+                result[0].parent = nn[0]
+
+            if result[1] is not None:
+                nn[1].add_child(result[1])
+                result[1].parent = nn[1]
+
+        # if len(nn[0].children) == 0 or len(nn[1].children) == 0:
+        #     print('asdad')
+
+        _tighten(*nn)
+
+        return nn
+
 
 def plot_r_plus_tree(r_tree: RPlusTree):
     plot_r_plus_node_recursive(r_tree.root, 0)
 
 
 def plot_get_color(depth: int):
-    return ['orange', 'black', 'grey', 'blue'][depth]
+    return 'white' if depth == 0 else 'black'
+    # return ['orange', 'black', 'grey', 'blue', 'brown', 'violet', 'pink', 'purple', 'indigo'][depth]
 
 
 def plot_r_plus_node(node: RPlusTreeNode, color: str):
@@ -364,3 +387,12 @@ def plot_r_plus_node_recursive(node: RPlusTreeNode, depth: int):
 
     for child in node.children:
         plot_r_plus_node_recursive(child, depth + 1)
+
+
+def build_r_plus_tree(entries: List[Geometry], max_node_capacity):
+    tree = RPlusTree(max_node_capacity)
+
+    for entry in entries:
+        tree.insert(entry)
+
+    return tree
