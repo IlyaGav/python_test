@@ -1,3 +1,4 @@
+import math
 from typing import List
 
 import shapely
@@ -62,19 +63,24 @@ def geometry_to_box(shape: Geometry):
 
 
 def get_nearest(entries: List[Entry], point: Point):
-    shapes = list(map(lambda e: e.shape, entries))
-
     min_distance = float('inf')
     nearest = None
 
-    for shape in shapes:
-        distance = shapely.distance(shape, point)
+    for entry in entries:
+        distance = shapely.distance(entry.shape, point)
 
         if distance < min_distance:
             min_distance = distance
-            nearest = shape
+            nearest = entry
 
     return nearest, min_distance
+
+
+def distance(box: BoundaryBox, point: Point):
+    nearest_x = max(box.x_min, min(point.x, box.x_max))
+    nearest_y = max(box.y_min, min(point.y, box.y_max))
+
+    return math.sqrt((nearest_x - point.x) ** 2 + (nearest_y - point.y) ** 2)
 
 
 def add_to_plot_box(box: BoundaryBox, color: ColorType = None):

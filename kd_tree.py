@@ -88,9 +88,9 @@ class KDTree(object):
 
     def find_nearest_neighbor(self, point: Point):
         nearest, _ = self.find_nearest_neighbor_internal(self.root, point, None, float('inf'))
-        return nearest
+        return nearest.shape
 
-    def find_nearest_neighbor_internal(self, node: KDTreeNode, point: Point, nearest: Geometry | None, min_distance):
+    def find_nearest_neighbor_internal(self, node: KDTreeNode, point: Point, nearest: Entry | None, min_distance):
         if node is None:
             return nearest, min_distance
 
@@ -119,7 +119,7 @@ class KDTree(object):
     def search(self, search: Geometry):
         search_box = geometry_to_box(search)
 
-        if intersection(self.root, search_box):
+        if contains(self.root, search_box):
             candidates = self.internal_search(self.root, search_box)
             shapes = list(map(lambda e: e.shape, candidates))
             return list(filter(lambda s: s.intersects(search), shapes))
@@ -127,7 +127,7 @@ class KDTree(object):
             return None
 
     def internal_search(self, node: KDTreeNode, search_box: BoundaryBox) -> List[Entry]:
-        search_result = list(filter(lambda n: intersection(n, search_box), node.entries))
+        search_result = list(filter(lambda e: intersection(e, search_box), node.entries))
 
         if not node.is_leaf():
             for child in [node.left, node.right]:

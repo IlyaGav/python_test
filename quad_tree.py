@@ -6,7 +6,7 @@ import shapely
 from shapely import Polygon, Geometry, Point
 
 from common import BoundaryBox, Entry, contains, get_nearest, geometry_to_box, intersection, plot_get_color, \
-    add_to_plot_box
+    add_to_plot_box, distance
 
 
 class QuadtreeNode(BoundaryBox):
@@ -98,20 +98,20 @@ class Quadtree(object):
 
     def find_nearest_neighbor(self, point: Point):
         nearest, _ = self.find_nearest_neighbor_internal(self.root, point, None, float('inf'))
-        return nearest
+        return nearest.shape
 
-    def find_nearest_neighbor_internal(self, node: QuadtreeNode, point: Point, nearest: Geometry | None, min_distance):
+    def find_nearest_neighbor_internal(self, node: QuadtreeNode, point: Point, nearest: Entry | None, min_distance):
         if node is None:
             return nearest, min_distance
 
-        candidate, distance = get_nearest(node.entries, point)
+        candidate, candidate_distance = get_nearest(node.entries, point)
 
-        if distance < min_distance:
+        if candidate_distance < min_distance:
             nearest = candidate
-            min_distance = distance
+            min_distance = candidate_distance
 
         if not node.is_leaf():
-            nodes = list(map(lambda n: [n, shapely.distance(n.boundary, point)],
+            nodes = list(map(lambda n: [n, distance(n, point)],
                              [node.top_left, node.top_right, node.bottom_right, node.bottom_left]))
             nodes = sorted(nodes, key=lambda n: n[1])
 
@@ -124,7 +124,7 @@ class Quadtree(object):
     def search(self, search: Geometry):
         search_box = geometry_to_box(search)
 
-        if intersection(self.root, search_box):
+        if contains(self.root, search_box):
             candidates = self.internal_search(self.root, search_box)
             shapes = list(map(lambda e: e.shape, candidates))
             return list(filter(lambda s: s.intersects(search), shapes))

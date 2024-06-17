@@ -6,7 +6,7 @@ from typing import List, Union
 import shapely
 from shapely import Geometry, Point
 
-from common import BoundaryBox, union, intersection, geometry_to_box, box_to_geometry, Entry, get_nearest
+from common import BoundaryBox, union, intersection, geometry_to_box, Entry, get_nearest, distance, contains
 from shapely_plot import add_to_plot_geometry
 
 
@@ -42,7 +42,7 @@ class RTree(object):
     def search(self, search: Geometry):
         search_box = geometry_to_box(search)
 
-        if intersection(self.root, search_box):
+        if contains(self.root, search_box):
             candidates = self.internal_search(self.root, search_box)
             shapes = list(map(lambda e: e.shape, candidates))
             return list(filter(lambda s: s.intersects(search), shapes))
@@ -51,19 +51,19 @@ class RTree(object):
 
     def find_nearest_neighbor(self, point: Point):
         nearest, _ = self.find_nearest_neighbor_internal(self.root, point, None, float('inf'))
-        return nearest
+        return nearest.shape
 
-    def find_nearest_neighbor_internal(self, node: RTreeNode, point: Point, nearest: Geometry | None, min_distance):
+    def find_nearest_neighbor_internal(self, node: RTreeNode, point: Point, nearest: Entry | None, min_distance):
         if node.is_leaf:
-            candidate, distance = get_nearest(node.children, point)
+            candidate, candidate_distance = get_nearest(node.children, point)
 
-            if distance < min_distance:
+            if candidate_distance < min_distance:
                 nearest = candidate
-                min_distance = distance
+                min_distance = candidate_distance
 
             return nearest, min_distance
 
-        nodes = list(map(lambda n: [n, shapely.distance(n.boundary, point)], node.children))
+        nodes = list(map(lambda n: [n, distance(n, point)], node.children))
         nodes = sorted(nodes, key=lambda n: n[1])
 
         for node in nodes:

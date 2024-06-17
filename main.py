@@ -5,13 +5,14 @@ import shapely
 from shapely import Point, Polygon
 
 from common import Entry
+from fixed_grid import FixedGrid, plot_fixed_grid
 from kd_tree import KDTree, plot_kd_tree
 from quad_tree import Quadtree, plot_quad_tree
 from r_tree import RTree, plot_r_tree
 from shapely_plot import add_to_plot_geometry, show_plot, set_title
 
 seed = int(time.time())
-# seed = 1717359252
+# seed = 1718660781
 # star
 # seed = 1713477765
 
@@ -19,7 +20,6 @@ seed = int(time.time())
 # seed = 1713477681
 random.seed(seed)
 print(f"random seed {seed}")
-
 
 def generate_random_point(min_x_coord=0, min_y_coord=0, max_x_coord=100, max_y_coord=100, ):
     return Point(random.uniform(min_x_coord, max_x_coord), random.uniform(min_y_coord, max_y_coord))
@@ -41,15 +41,16 @@ def generate_random_box(min_x_coord=0, min_y_coord=0, max_x_coord=100, max_y_coo
 
 boundary = shapely.box(0, 0, 100, 100)
 minx, miny, maxx, maxy = boundary.bounds
-polygons = [generate_random_box(minx, miny, maxx, maxy) for _ in range(50)]
-entries = list(Entry(p) for p in polygons)
-# points = [generate_random_point(minx, miny, maxx, maxy) for _ in range(100)]
-# entries = list(Entry(p) for p in points)
+# polygons = [generate_random_box(minx, miny, maxx, maxy) for _ in range(50)]
+# entries = list(Entry(p) for p in polygons)
+points = [generate_random_point(minx, miny, maxx, maxy) for _ in range(10)]
+entries = list(Entry(p) for p in points)
 
 search_point = generate_random_point(minx, miny, maxx, maxy)
 search_box = generate_random_box(minx + 20, miny + 20, maxx, maxy, 15, 30)
 
 kd_tree = KDTree(boundary, 10, 10)
+grid = FixedGrid(boundary, 10)
 quad_tree = Quadtree(boundary, 10, 10)
 r_tree = RTree(10, 'quadratic')
 
@@ -74,41 +75,60 @@ show_plot()
 
 for entry in entries:
     add_to_plot_geometry(entry.shape, 'red')
-    quad_tree.insert(entry)
+    grid.insert(entry)
 
-plot_quad_tree(quad_tree)
+plot_fixed_grid(grid)
 
-nearest = quad_tree.find_nearest_neighbor(search_point)
+nearest = grid.find_nearest_neighbor(search_point)
 add_to_plot_geometry(nearest, 'green')
 add_to_plot_geometry(search_point, 'yellow')
 
-# search_result = quad_tree.search(search_box)
+# search_result = grid.search(search_box)
 # add_to_plot_geometry(search_box, 'yellow')
 # if search_result is not None:
 #     for r in search_result:
 #         add_to_plot_geometry(r, 'green')
 
-set_title('quad_tree')
+set_title('fixed_grid')
 show_plot()
-
-for entry in entries:
-    add_to_plot_geometry(entry.shape, 'red')
-    r_tree.insert(entry)
-
-plot_r_tree(r_tree)
-
-nearest = r_tree.find_nearest_neighbor(search_point)
-add_to_plot_geometry(nearest, 'green')
-add_to_plot_geometry(search_point, 'yellow')
-
-# search_result = r_tree.search(search_box)
-# add_to_plot_geometry(search_box, 'yellow')
-# if search_result is not None:
-#     for r in search_result:
-#         add_to_plot_geometry(r, 'green')
-
-set_title('r_tree')
-show_plot()
+#
+# for entry in entries:
+#     add_to_plot_geometry(entry.shape, 'red')
+#     quad_tree.insert(entry)
+#
+# plot_quad_tree(quad_tree)
+#
+# nearest = quad_tree.find_nearest_neighbor(search_point)
+# add_to_plot_geometry(nearest, 'green')
+# add_to_plot_geometry(search_point, 'yellow')
+#
+# # search_result = quad_tree.search(search_box)
+# # add_to_plot_geometry(search_box, 'yellow')
+# # if search_result is not None:
+# #     for r in search_result:
+# #         add_to_plot_geometry(r, 'green')
+#
+# set_title('quad_tree')
+# show_plot()
+#
+# for entry in entries:
+#     add_to_plot_geometry(entry.shape, 'red')
+#     r_tree.insert(entry)
+#
+# plot_r_tree(r_tree)
+#
+# nearest = r_tree.find_nearest_neighbor(search_point)
+# add_to_plot_geometry(nearest, 'green')
+# add_to_plot_geometry(search_point, 'yellow')
+#
+# # search_result = r_tree.search(search_box)
+# # add_to_plot_geometry(search_box, 'yellow')
+# # if search_result is not None:
+# #     for r in search_result:
+# #         add_to_plot_geometry(r, 'green')
+#
+# set_title('r_tree')
+# show_plot()
 
 # for polygon in polygons:
 #     add_to_plot_geometry(polygon, 'red')

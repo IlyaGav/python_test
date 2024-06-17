@@ -9,7 +9,6 @@ from shapely_plot import add_to_plot_geometry
 
 
 # TODO Наверное стоит избавиться от z_curve
-# TODO rename? spatial grid, hierarchical grid
 class HierarchicalGrid:
     def __init__(self, boundary: Polygon, grid_size: int = 4, limit_cells: int = 16, levels: int = 4):
         self.boundary = boundary
