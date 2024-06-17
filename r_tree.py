@@ -4,57 +4,10 @@ import random
 from typing import List, Union
 
 import shapely
-from shapely import Polygon, Geometry, Point
+from shapely import Geometry, Point
 
+from common import BoundaryBox, union, intersection, geometry_to_box, box_to_geometry, Entry, get_nearest
 from shapely_plot import add_to_plot_geometry
-
-
-def union(*boundaries: BoundaryBox):
-    minx, miny, = float('inf'), float('inf')
-    maxx, maxy = float('-inf'), float('-inf')
-
-    for boundary in boundaries:
-        minx, miny = min(boundary.x_min, minx), min(boundary.y_min, miny)
-        maxx, maxy = max(boundary.x_max, maxx), max(boundary.y_max, maxy)
-
-    return BoundaryBox(minx, miny, maxx, maxy)
-
-
-def intersection(rect1: BoundaryBox, rect2: BoundaryBox) -> bool:
-    return (rect1.x_min <= rect2.x_max and
-            rect1.x_max >= rect2.x_min and
-            rect1.y_min <= rect2.y_max and
-            rect1.y_max >= rect2.y_min)
-
-
-def box_to_geometry(box: BoundaryBox):
-    return shapely.box(box.x_min, box.y_min, box.x_max, box.y_max)
-
-
-def geometry_to_box(shape: Geometry):
-    x_min, y_min, x_max, y_max = Polygon(shapely.envelope(shape)).bounds
-    return BoundaryBox(x_min, y_min, x_max, y_max)
-
-
-class BoundaryBox:
-    def __init__(self, x_min, y_min, x_max, y_max):
-        self.x_min = x_min
-        self.y_min = y_min
-        self.x_max = x_max
-        self.y_max = y_max
-
-        self.boundary = shapely.box(self.x_min, self.y_min, self.x_max, self.y_max)
-
-    def area(self) -> float:
-        return (self.x_max - self.x_min) * (self.y_max - self.y_min)
-
-
-
-class Entry(BoundaryBox):
-    def __init__(self, shape: Geometry):
-        x_min, y_min, x_max, y_max = (shapely.envelope(shape)).bounds
-        super().__init__(x_min, y_min, x_max, y_max)
-        self.shape = shape
 
 
 class RTreeNode(BoundaryBox):
@@ -73,16 +26,13 @@ class RTreeNode(BoundaryBox):
         self.boundary = shapely.box(self.x_min, self.y_min, self.x_max, self.y_max)
 
 
-
 class RTree(object):
     def __init__(self, max_node_capacity=4, algorithm: 'linear' | 'quadratic' = 'linear'):
         self.root = RTreeNode([], True)
         self.max_node_capacity = max_node_capacity
         self.algorithm = algorithm
 
-    def insert(self, shape: Geometry):
-        entry = Entry(shape)
-
+    def insert(self, entry: Entry):
         self.root.children = self.internal_insert(self.root, entry)
 
         if len(self.root.children) > self.max_node_capacity:
@@ -93,8 +43,9 @@ class RTree(object):
         search_box = geometry_to_box(search)
 
         if intersection(self.root, search_box):
-            entries = self.internal_search(self.root, search_box)
-            return list(map(lambda e: box_to_geometry(e), entries))
+            candidates = self.internal_search(self.root, search_box)
+            shapes = list(map(lambda e: e.shape, candidates))
+            return list(filter(lambda s: s.intersects(search), shapes))
         else:
             return None
 
@@ -104,8 +55,7 @@ class RTree(object):
 
     def find_nearest_neighbor_internal(self, node: RTreeNode, point: Point, nearest: Geometry | None, min_distance):
         if node.is_leaf:
-            entries = list(map(lambda e: e.shape, node.children))
-            candidate, distance = get_nearest(entries, point)
+            candidate, distance = get_nearest(node.children, point)
 
             if distance < min_distance:
                 nearest = candidate
@@ -346,16 +296,3 @@ def build_r_tree(entries: List[Geometry], max_node_capacity, algorithm: TypeAlgo
 def distance_func(shape: Geometry, point: Point):
     return shapely.distance(point, shape)
 
-
-def get_nearest(shapes: List[Geometry], point: Point):
-    min_distance = float('inf')
-    nearest = None
-
-    for shape in shapes:
-        distance = shapely.distance(shape, point)
-
-        if distance < min_distance:
-            min_distance = distance
-            nearest = shape
-
-    return nearest, min_distance

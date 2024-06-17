@@ -4,6 +4,8 @@ import time
 import shapely
 from shapely import Point, Polygon
 
+from common import Entry
+from kd_tree import KDTree, plot_kd_tree
 from r_tree import RTree, plot_r_tree
 from shapely_plot import add_to_plot_geometry, show_plot, set_title
 
@@ -39,32 +41,52 @@ def generate_random_box(min_x_coord=0, min_y_coord=0, max_x_coord=100, max_y_coo
 boundary = shapely.box(0, 0, 100, 100)
 minx, miny, maxx, maxy = boundary.bounds
 # polygons = [generate_random_box(minx, miny, maxx, maxy) for _ in range(20)]
-points = [generate_random_point(minx, miny, maxx, maxy) for _ in range(20)]
+# entries = list(Entry(p) for p in polygons)
+points = [generate_random_point(minx, miny, maxx, maxy) for _ in range(100)]
+entries = list(Entry(p) for p in points)
+
 search_point = generate_random_point(minx, miny, maxx, maxy)
+search_box = generate_random_box(minx + 20, miny + 20, maxx, maxy, 15, 30)
 
-# polygons = [generate_random_point(minx, miny, maxx, maxy) for _ in range(200)]
-# search_box = generate_random_box(minx + 20, miny + 20, maxx, maxy)
-# search_box = shapely.box(20, 20, 80, 80)
+kd_tree = KDTree(boundary, 10, 10)
+r_tree = RTree(10, 'quadratic')
 
-r_tree_l = RTree(4, 'linear')
-# r_tree_q = RTree(4, 'quadratic')
+for entry in entries:
+    add_to_plot_geometry(entry.shape, 'red')
+    kd_tree.insert(entry)
 
-for point in points:
-    add_to_plot_geometry(point, 'red')
-    r_tree_l.insert(point)
+plot_kd_tree(kd_tree)
 
-nearest = r_tree_l.find_nearest_neighbor(search_point)
+# nearest = kd_tree.find_nearest_neighbor(search_point)
+# add_to_plot_geometry(nearest, 'green')
+# add_to_plot_geometry(search_point, 'yellow')
 
-print('point', search_point)
-print('nearest', nearest)
+search_result = kd_tree.search(search_box)
+add_to_plot_geometry(search_box, 'yellow')
+if search_result is not None:
+    for r in search_result:
+        add_to_plot_geometry(r, 'green')
 
-plot_r_tree(r_tree_l)
+set_title('kd_tree')
+show_plot()
 
-add_to_plot_geometry(nearest, 'green')
+for entry in entries:
+    add_to_plot_geometry(entry.shape, 'red')
+    r_tree.insert(entry)
 
-add_to_plot_geometry(search_point, 'yellow')
+plot_r_tree(r_tree)
 
-set_title('linear')
+# nearest = r_tree.find_nearest_neighbor(search_point)
+# add_to_plot_geometry(nearest, 'green')
+# add_to_plot_geometry(search_point, 'yellow')
+
+search_result = r_tree.search(search_box)
+add_to_plot_geometry(search_box, 'yellow')
+if search_result is not None:
+    for r in search_result:
+        add_to_plot_geometry(r, 'green')
+
+set_title('r_tree')
 show_plot()
 
 # for polygon in polygons:
