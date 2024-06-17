@@ -1,168 +1,160 @@
 from __future__ import annotations
 
-import timeit
 from typing import List
 
 import shapely
 from shapely import Polygon, Geometry, Point
 
-from shapely_plot import add_to_plot_geometry
+from common import BoundaryBox, Entry, contains, get_nearest, geometry_to_box, intersection, plot_get_color, \
+    add_to_plot_box
 
 
-class Quadtree(object):
-    def __init__(self, boundary: Polygon, depth: int, bucket_capacity, max_depth):
-        self.boundary = boundary
+class QuadtreeNode(BoundaryBox):
+    def __init__(self, x_min, y_min, x_max, y_max, depth):
+        super().__init__(x_min, y_min, x_max, y_max)
+
+        self.top_left: QuadtreeNode | None = None
+        self.top_right: QuadtreeNode | None = None
+        self.bottom_left: QuadtreeNode | None = None
+        self.bottom_right: QuadtreeNode | None = None
+
+        self.entries = []
         self.depth = depth
-
-        self.bucket_capacity = bucket_capacity
-        self.max_depth = max_depth
-
-        self.top_left: Quadtree | None = None
-        self.top_right: Quadtree | None = None
-        self.bottom_left: Quadtree | None = None
-        self.bottom_right: Quadtree | None = None
-
-        self.shapes = []
-        self.minx, self.miny, self.maxx, self.maxy = boundary.bounds
 
     def is_leaf(self):
         return (self.top_left is None or self.top_right is None or
                 self.bottom_left is None or self.bottom_right is None)
 
-    # def contains(self, point: Point) -> bool:
-    #     return (self.minx <= point.x <= self.maxx) and (self.miny <= point.y <= self.maxy)
 
-    def insert(self, shape: Geometry):
-        if not self.boundary.contains(shapely.envelope(shape)):
+def get_containing_child(node: QuadtreeNode, entry: Entry):
+    if node.is_leaf():
+        return None
+
+    if contains(node.top_left, entry):
+        return node.top_left
+
+    if contains(node.top_right, entry):
+        return node.top_right
+
+    if contains(node.bottom_left, entry):
+        return node.bottom_left
+
+    return node.bottom_right if contains(node.bottom_right, entry) else None
+
+
+class Quadtree(object):
+    def __init__(self, boundary: Polygon, bucket_capacity: int, max_depth: int):
+        x_min, y_min, x_max, y_max = (shapely.envelope(boundary)).bounds
+        self.root = QuadtreeNode(x_min, y_min, x_max, y_max, 0)
+
+        self.bucket_capacity = bucket_capacity
+        self.max_depth = max_depth
+
+    def insert(self, entry: Entry):
+        if not contains(self.root, entry):
             raise ValueError("ElementOutside")
 
-        if len(self.shapes) >= self.bucket_capacity:
-            self.split()
+        self.insert_internal(self.root, entry)
 
-        containing_child = self.get_containing_child(shape)
-
-        if containing_child is not None:
-            containing_child.insert(shape)
+    def insert_internal(self, node: QuadtreeNode, entry: Entry):
+        if node.is_leaf():
+            node.entries.append(entry)
+            if len(node.entries) >= self.bucket_capacity:
+                self.split(node)
         else:
-            self.shapes.append(shape)
+            containing_child = get_containing_child(node, entry)
 
-    def split(self):
-        if not self.is_leaf():
+            if containing_child is not None:
+                self.insert_internal(containing_child, entry)
+            else:
+                node.entries.append(entry)
+
+    def split(self, node: QuadtreeNode):
+        if not node.is_leaf():
             return
 
-        depth = self.depth + 1
+        depth = node.depth + 1
 
         if depth > self.max_depth:
             return
 
-        minx, miny, maxx, maxy = self.boundary.bounds
+        midx, midy = (node.x_min + node.x_max) / 2, (node.y_min + node.y_max) / 2
 
-        midx, midy = (minx + maxx) / 2, (miny + maxy) / 2
+        node.top_left = QuadtreeNode(node.x_min, midy, midx, node.y_max, depth)
 
-        self.top_left = Quadtree(shapely.box(minx, midy, midx, maxy), depth, self.bucket_capacity, self.max_depth)
+        node.top_right = QuadtreeNode(midx, midy, node.x_max, node.y_max, depth)
 
-        self.top_right = Quadtree(shapely.box(midx, midy, maxx, maxy), depth, self.bucket_capacity, self.max_depth)
+        node.bottom_left = QuadtreeNode(node.x_min, node.y_min, midx, midy, depth)
 
-        self.bottom_left = Quadtree(shapely.box(minx, miny, midx, midy), depth, self.bucket_capacity, self.max_depth)
+        node.bottom_right = QuadtreeNode(midx, node.y_min, node.x_max, midy, depth)
 
-        self.bottom_right = Quadtree(shapely.box(midx, miny, maxx, midy), depth, self.bucket_capacity, self.max_depth)
+        entries = node.entries.copy()
 
-        shapes = self.shapes.copy()
-
-        for shape in shapes:
-            containing_child = self.get_containing_child(shape)
+        for entry in entries:
+            containing_child = get_containing_child(node, entry)
             if containing_child is not None:
-                self.shapes.remove(shape)
-                containing_child.insert(shape)
+                node.entries.remove(entry)
+                containing_child.entries.append(entry)
 
-    def get_containing_child(self, shape):
-        if self.is_leaf():
-            return None
+    def find_nearest_neighbor(self, point: Point):
+        nearest, _ = self.find_nearest_neighbor_internal(self.root, point, None, float('inf'))
+        return nearest
 
-        boundary = shapely.envelope(shape)
+    def find_nearest_neighbor_internal(self, node: QuadtreeNode, point: Point, nearest: Geometry | None, min_distance):
+        if node is None:
+            return nearest, min_distance
 
-        if self.top_left.boundary.contains(boundary):
-            return self.top_left
-
-        if self.top_right.boundary.contains(boundary):
-            return self.top_right
-
-        if self.bottom_left.boundary.contains(boundary):
-            return self.bottom_left
-
-        return self.bottom_right if self.bottom_right.boundary.contains(boundary) else None
-
-
-def build_quad_tree(boundary: Polygon, shapes: List[shapely.Geometry], bucket_capacity: int = 8, max_depth: int = 8):
-    if not shapes or len(shapes) == 0:
-        return None
-
-    tree = Quadtree(boundary, 0, bucket_capacity, max_depth)
-
-    for shape in shapes:
-        tree.insert(shape)
-
-    return tree
-
-
-def quad_tree_find_nearest_neighbor(tree: Quadtree, point: Point):
-    nearest, _ = find_nearest_neighbor_internal(tree, point, None, float('inf'))
-    return nearest
-
-
-def find_nearest_neighbor_internal(tree: Quadtree, point: Point, nearest: Geometry | None, min_distance):
-    if tree is None:
-        return nearest, min_distance
-
-    candidate, distance = get_nearest(tree.shapes, point)
-
-    if distance < min_distance:
-        nearest = candidate
-        min_distance = distance
-
-    if not tree.is_leaf():
-        nodes = list(map(lambda n: [n, shapely.distance(n.boundary, point)],
-                         [tree.top_left, tree.top_right, tree.bottom_right, tree.bottom_left]))
-        nodes = sorted(nodes, key=lambda n: n[1])
-        for node in nodes:
-            if node[1] < min_distance:
-                nearest, min_distance = find_nearest_neighbor_internal(node[0], point, nearest, min_distance)
-
-    return nearest, min_distance
-
-
-def get_nearest(shapes: List[Geometry], point: Point):
-    min_distance = float('inf')
-    nearest = None
-
-    for shape in shapes:
-        distance = shapely.distance(point, shape)
+        candidate, distance = get_nearest(node.entries, point)
 
         if distance < min_distance:
+            nearest = candidate
             min_distance = distance
-            nearest = shape
 
-    return nearest, min_distance
+        if not node.is_leaf():
+            nodes = list(map(lambda n: [n, shapely.distance(n.boundary, point)],
+                             [node.top_left, node.top_right, node.bottom_right, node.bottom_left]))
+            nodes = sorted(nodes, key=lambda n: n[1])
+
+            for node in nodes:
+                if node[1] < min_distance:
+                    nearest, min_distance = self.find_nearest_neighbor_internal(node[0], point, nearest, min_distance)
+
+        return nearest, min_distance
+
+    def search(self, search: Geometry):
+        search_box = geometry_to_box(search)
+
+        if intersection(self.root, search_box):
+            candidates = self.internal_search(self.root, search_box)
+            shapes = list(map(lambda e: e.shape, candidates))
+            return list(filter(lambda s: s.intersects(search), shapes))
+        else:
+            return None
+
+    def internal_search(self, node: QuadtreeNode, search_box: BoundaryBox) -> List[Entry]:
+        search_result = list(filter(lambda n: intersection(n, search_box), node.entries))
+
+        if not node.is_leaf():
+            for child in [node.top_left, node.top_right, node.bottom_right, node.bottom_left]:
+                if intersection(child, search_box):
+                    search_result.extend(self.internal_search(child, search_box))
+
+        return search_result
 
 
 def plot_quad_tree(tree: Quadtree):
-    add_to_plot_geometry(tree.boundary, 'black')
+    plot_quad_tree_internal(tree.root)
 
-    for shape in tree.shapes:
-        add_to_plot_geometry(shape, 'orange')
 
-    if tree.is_leaf():
+def plot_quad_tree_internal(node: QuadtreeNode):
+    color = plot_get_color(node.depth)
+
+    add_to_plot_box(node, color)
+
+    if node.is_leaf():
         return
 
-    plot_quad_tree(tree.top_left)
-    plot_quad_tree(tree.top_right)
-    plot_quad_tree(tree.bottom_left)
-    plot_quad_tree(tree.bottom_right)
-
-
-def quad_tree_benchmark_build(boundary: Polygon, shapes: List[shapely.Geometry], bucket_capacity=8, max_depth=8):
-    return timeit.Timer(lambda: build_quad_tree(boundary, shapes, bucket_capacity, max_depth)).timeit(1)
-
-
-def quad_tree_benchmark_find_nearest_neighbor(tree: Quadtree, query_point: Point):
-    return timeit.Timer(lambda: quad_tree_find_nearest_neighbor(tree, query_point)).timeit(1)
+    plot_quad_tree_internal(node.top_left)
+    plot_quad_tree_internal(node.top_right)
+    plot_quad_tree_internal(node.bottom_left)
+    plot_quad_tree_internal(node.bottom_right)

@@ -6,6 +6,7 @@ from shapely import Point, Polygon
 
 from common import Entry
 from kd_tree import KDTree, plot_kd_tree
+from quad_tree import Quadtree, plot_quad_tree
 from r_tree import RTree, plot_r_tree
 from shapely_plot import add_to_plot_geometry, show_plot, set_title
 
@@ -40,15 +41,16 @@ def generate_random_box(min_x_coord=0, min_y_coord=0, max_x_coord=100, max_y_coo
 
 boundary = shapely.box(0, 0, 100, 100)
 minx, miny, maxx, maxy = boundary.bounds
-# polygons = [generate_random_box(minx, miny, maxx, maxy) for _ in range(20)]
-# entries = list(Entry(p) for p in polygons)
-points = [generate_random_point(minx, miny, maxx, maxy) for _ in range(100)]
-entries = list(Entry(p) for p in points)
+polygons = [generate_random_box(minx, miny, maxx, maxy) for _ in range(50)]
+entries = list(Entry(p) for p in polygons)
+# points = [generate_random_point(minx, miny, maxx, maxy) for _ in range(100)]
+# entries = list(Entry(p) for p in points)
 
 search_point = generate_random_point(minx, miny, maxx, maxy)
 search_box = generate_random_box(minx + 20, miny + 20, maxx, maxy, 15, 30)
 
 kd_tree = KDTree(boundary, 10, 10)
+quad_tree = Quadtree(boundary, 10, 10)
 r_tree = RTree(10, 'quadratic')
 
 for entry in entries:
@@ -57,17 +59,36 @@ for entry in entries:
 
 plot_kd_tree(kd_tree)
 
-# nearest = kd_tree.find_nearest_neighbor(search_point)
-# add_to_plot_geometry(nearest, 'green')
-# add_to_plot_geometry(search_point, 'yellow')
+nearest = kd_tree.find_nearest_neighbor(search_point)
+add_to_plot_geometry(nearest, 'green')
+add_to_plot_geometry(search_point, 'yellow')
 
-search_result = kd_tree.search(search_box)
-add_to_plot_geometry(search_box, 'yellow')
-if search_result is not None:
-    for r in search_result:
-        add_to_plot_geometry(r, 'green')
+# search_result = kd_tree.search(search_box)
+# add_to_plot_geometry(search_box, 'yellow')
+# if search_result is not None:
+#     for r in search_result:
+#         add_to_plot_geometry(r, 'green')
 
 set_title('kd_tree')
+show_plot()
+
+for entry in entries:
+    add_to_plot_geometry(entry.shape, 'red')
+    quad_tree.insert(entry)
+
+plot_quad_tree(quad_tree)
+
+nearest = quad_tree.find_nearest_neighbor(search_point)
+add_to_plot_geometry(nearest, 'green')
+add_to_plot_geometry(search_point, 'yellow')
+
+# search_result = quad_tree.search(search_box)
+# add_to_plot_geometry(search_box, 'yellow')
+# if search_result is not None:
+#     for r in search_result:
+#         add_to_plot_geometry(r, 'green')
+
+set_title('quad_tree')
 show_plot()
 
 for entry in entries:
@@ -76,15 +97,15 @@ for entry in entries:
 
 plot_r_tree(r_tree)
 
-# nearest = r_tree.find_nearest_neighbor(search_point)
-# add_to_plot_geometry(nearest, 'green')
-# add_to_plot_geometry(search_point, 'yellow')
+nearest = r_tree.find_nearest_neighbor(search_point)
+add_to_plot_geometry(nearest, 'green')
+add_to_plot_geometry(search_point, 'yellow')
 
-search_result = r_tree.search(search_box)
-add_to_plot_geometry(search_box, 'yellow')
-if search_result is not None:
-    for r in search_result:
-        add_to_plot_geometry(r, 'green')
+# search_result = r_tree.search(search_box)
+# add_to_plot_geometry(search_box, 'yellow')
+# if search_result is not None:
+#     for r in search_result:
+#         add_to_plot_geometry(r, 'green')
 
 set_title('r_tree')
 show_plot()
