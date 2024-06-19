@@ -28,13 +28,13 @@
 #     return Point(random.uniform(min_x_coord, max_x_coord), random.uniform(min_y_coord, max_y_coord))
 #
 #
-# def generate_random_line(num_points=2, min_coord=0, max_coord=100):
-#     points = [generate_random_point(min_coord, max_coord) for _ in range(num_points)]
+# def generate_random_line(num_entries=2, min_coord=0, max_coord=100):
+#     points = [generate_random_point(min_coord, max_coord) for _ in range(num_entries)]
 #     return LineString([(point.x, point.y) for point in points])
 #
 #
-# def generate_random_polygon(num_points=3, min_coord=0, max_coord=100):
-#     points = [generate_random_point(min_coord, max_coord) for _ in range(num_points)]
+# def generate_random_polygon(num_entries=3, min_coord=0, max_coord=100):
+#     points = [generate_random_point(min_coord, max_coord) for _ in range(num_entries)]
 #     return Polygon([(point.x, point.y) for point in points])
 #
 #

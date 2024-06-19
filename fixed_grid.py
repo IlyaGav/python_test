@@ -85,7 +85,7 @@ class FixedGrid(BoundaryBox):
                     entries = list(filter(lambda e: intersection(e, search_box), self.get_objects_in_cell(x, y)))
                     candidates.extend(entries)
 
-            shapes = list(map(lambda e: e.shape, candidates))
+            shapes = list(map(lambda e: e.shape, set(candidates)))
             return list(filter(lambda s: s.intersects(search), shapes))
         else:
             return None

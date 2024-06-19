@@ -6,7 +6,7 @@ import shapely
 from shapely import Polygon, Geometry, Point
 
 from common import BoundaryBox, Entry, contains, get_nearest, geometry_to_box, intersection, plot_get_color, \
-    add_to_plot_box, distance
+    add_to_plot_box, distance, strict_contains
 
 
 class QuadtreeNode(BoundaryBox):
@@ -30,16 +30,16 @@ def get_containing_child(node: QuadtreeNode, entry: Entry):
     if node.is_leaf():
         return None
 
-    if contains(node.top_left, entry):
+    if strict_contains(node.top_left, entry):
         return node.top_left
 
-    if contains(node.top_right, entry):
+    if strict_contains(node.top_right, entry):
         return node.top_right
 
-    if contains(node.bottom_left, entry):
+    if strict_contains(node.bottom_left, entry):
         return node.bottom_left
 
-    return node.bottom_right if contains(node.bottom_right, entry) else None
+    return node.bottom_right if strict_contains(node.bottom_right, entry) else None
 
 
 class Quadtree(object):

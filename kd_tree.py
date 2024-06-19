@@ -6,7 +6,7 @@ import shapely
 from shapely import Polygon, Geometry, Point
 
 from common import geometry_to_box, BoundaryBox, Entry, contains, get_nearest, intersection, plot_get_color, \
-    add_to_plot_box
+    add_to_plot_box, strict_contains
 from shapely_plot import add_to_plot_geometry
 
 
@@ -79,7 +79,7 @@ class KDTree(object):
         entries = node.entries.copy()
 
         for entry in entries:
-            if contains(node.left, entry):
+            if strict_contains(node.left, entry):
                 node.entries.remove(entry)
                 node.left.entries.append(entry)
             elif contains(node.right, entry):
