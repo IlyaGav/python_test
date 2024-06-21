@@ -59,6 +59,15 @@ search_range_filename = f'results/search_range_{type}.json'
 search_nearest_filename = f'results/search_nearest_{type}.json'
 
 
+def refresh():
+    global building_filename
+    global search_range_filename
+    global search_nearest_filename
+    building_filename = f'results/building_{type}.json'
+    search_range_filename = f'results/search_range_{type}.json'
+    search_nearest_filename = f'results/search_nearest_{type}.json'
+
+
 def generate_entries(distribution) -> List[Entry]:
     if type == 'points':
         points = []
@@ -249,22 +258,19 @@ def building(new: bool = False):
 
     print()
 
-    # def mean(distribution, structure):
-    #     return np.mean([r[structure] for r in results_50_16[distribution]])
-    #
-    # data = {
-    #     kd_tree_key: mean(uniform, kd_tree_key),
-    #     quad_tree_key: mean(uniform, quad_tree_key),
-    #     grid_key: mean(uniform, grid_key),
-    #     r_tree_l_key: mean(uniform, r_tree_l_key),
-    #     r_tree_q_key: mean(uniform, r_tree_q_key),
-    # }
-    #
-    # print(data)
-    #
-    # plot(data)
-
     print('end building!')
+
+
+def title(method):
+    if method == 'build':
+        return f'Построение индекса на {'точках' if type == 'points' else 'полигонах'}'
+
+    if method == 'range':
+        return f'Поиск в диапазоне на {'точках' if type == 'points' else 'полигонах'}'
+
+
+    if method == 'nearest':
+        return f'Поиск ближайшего соседа на {'точках' if type == 'points' else 'полигонах'}'
 
 
 def search_range(new: bool = False):
@@ -572,28 +578,72 @@ def search_nearest(new: bool = False):
     print('end search!')
 
 
-def plot(data: Dict[str, float]):
-    labels = [i for (i, _) in enumerate(data.keys())]
-    values = [*data.values()]
+def plot(uniform_data: Dict[str, float], sparse_data: Dict[str, float], tight_data: Dict[str, float], title):
+    def combine(*dicts):
+        combined_dict = {}
 
-    # Список цветов для каждого столбца
-    colors = ['yellow', 'blue', 'green', 'brown', 'orange']
+        for key in dicts[0]:
+            combined_dict[key] = []
 
-    # Создание горизонтальной столбчатой диаграммы с разными цветами
-    bars = plt.barh(labels, values, color=colors, edgecolor='black', linewidth=1.5)
+            for dict in dicts:
+                combined_dict[key].append(dict[key])
 
-    # Добавление значений на сами столбцы
-    for (i, bar) in enumerate(bars):
-        width = bar.get_width()
-        plt.text(-10, bar.get_y() + bar.get_height() / 2, list(data.keys())[i], va='center', ha='left')
+        return combined_dict
+
+    combined_data = combine(uniform_data, sparse_data, tight_data)
+
+    def draw_bars(data, margin, offset, legend):
+        labels = [offset + margin * i for (i, _) in enumerate(data)]
+        values = [*data]
+
+        colors = ['brown', 'orange', 'green']
+
+        bars = plt.barh(labels, values, color=colors, edgecolor='black', linewidth=1,
+                        label=['Равномерные', 'Разреженные', 'Плотные'] if legend else None,
+                        )
+
+        # # Добавление значений на сами столбцы
+        # for (i, bar) in enumerate(bars):
+        #     width = bar.get_width()
+        #     plt.text(width, bar.get_y() + bar.get_height() / 2, name, va='center', ha='left')
+
+    def sort(kv):
+        name = kv[0]
+
+        if name == kd_tree_key:
+            return 5
+        elif name == quad_tree_key:
+            return 4
+        elif name == grid_key:
+            return 3
+        elif name == r_tree_l_key:
+            return 2
+        elif name == r_tree_q_key:
+            return 1
+        elif name == brute_force_key:
+            return 0
+
+    sorted_data = sorted(combined_data.items(), key=lambda kv: sort(kv))
+
+    for i, (k, v) in enumerate(sorted_data):
+        draw_bars(v, 1, i * 4, i == 0)
+
+    # Установка логарифмической шкалы по оси Y
+    # plt.xscale('log')
+
+    # Ограничиваем ось X
+    plt.xlim(0, 0.004)
 
     # Добавление заголовка и меток осей
-    plt.title('Горизонтальная столбчатая диаграмма')
-    plt.xlabel('Значения')
-    plt.ylabel('Категории')
+    plt.title(title)
+    plt.xlabel('время, c')
+
+    # Добавление легенды
+    plt.legend(loc='best')
 
     # Добавление сетки
-    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    plt.grid(True)
+    # plt.grid(True, linestyle='-')
 
     plt.gca().set_yticks([])
 
@@ -618,8 +668,42 @@ def calc_mean(distribution, results, result):
 
     results[distribution][count] = c
 
-# building(True)
 
-search_range(True)
 
-search_nearest(True)
+# type = 'points'
+# refresh()
+# build_result = read(building_filename)
+# plot(build_result[uniform][value], build_result[sparse][value], build_result[tight][value], title('build'))
+#
+#
+# type = 'polygons'
+# refresh()
+# build_result = read(building_filename)
+# plot(build_result[uniform][value], build_result[sparse][value], build_result[tight][value], title('build'))
+
+# type = 'points'
+# refresh()
+# build_result = read(search_range_filename)
+# plot(build_result[uniform][value], build_result[sparse][value], build_result[tight][value], title('range'))
+#
+#
+# type = 'polygons'
+# refresh()
+# build_result = read(search_range_filename)
+# plot(build_result[uniform][value], build_result[sparse][value], build_result[tight][value], title('range'))
+
+
+type = 'points'
+refresh()
+build_result = read(search_nearest_filename)
+plot(build_result[uniform][value], build_result[sparse][value], build_result[tight][value], title('nearest'))
+
+
+type = 'polygons'
+refresh()
+build_result = read(search_nearest_filename)
+plot(build_result[uniform][value], build_result[sparse][value], build_result[tight][value], title('nearest'))
+
+# search_range(True)
+
+# search_nearest(True)
